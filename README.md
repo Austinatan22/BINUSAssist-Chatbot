@@ -1,6 +1,6 @@
 # BINUSAssist Chatbot
 
-A RAG (Retrieval-Augmented Generation) chatbot for BINUS School of Computer Science that answers questions about academic programs (curricula, learning outcomes, career prospects, etc.) by retrieving from official program-guide documents rather than relying on a model's general knowledge. Built against [`prd-binus-socs-chatbot (1).md`](<prd-binus-socs-chatbot (1).md>); see that file for the full requirements spec.
+A RAG (Retrieval-Augmented Generation) chatbot for BINUS School of Computer Science that answers questions about academic programs (curricula, learning outcomes, career prospects, etc.) by retrieving from official program-guide documents rather than relying on a model's general knowledge.
 
 ## Architecture
 
@@ -106,6 +106,5 @@ Runs automatically on every push/PR via GitHub Actions ([`.github/workflows/ci.y
 
 ## Notes
 
-- `IMPROVEMENTS.md` tracks the engineering/product backlog: what's done, what's open, and why each item matters.
-- `prd-binus-socs-chatbot (1).md` is the requirements spec this project was built against.
 - `.env` is gitignored; only `.env.example` (no real keys) is checked in.
+- `socs_documents/` holds the source program catalogs the knowledge base is built from.

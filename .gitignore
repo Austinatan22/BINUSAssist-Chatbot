@@ -3,10 +3,11 @@
 __pycache__/
 *.pyc
 
-# Internal development notes -- kept locally, not published
+# Internal development notes / spec -- kept locally, not published
 PROJECT_LOG.md
 IMPROVEMENTS.md
 KB_EXPANSION_PLAN.md
+prd-binus-socs-chatbot (1).md
 
 # Env
 .env
