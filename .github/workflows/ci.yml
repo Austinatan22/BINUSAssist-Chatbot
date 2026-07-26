@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      # CPU wheel, not the CUDA build from README's setup instructions -- GitHub-hosted
+      # runners have no GPU, and the unit suite (tests/) never executes a model, only the
+      # pure/deterministic helpers around retrieval, chunking, and caching. torch is still
+      # a real transitive import (docling depends on it even with do_ocr disabled), so it
+      # has to be installed for backend modules to import at all.
+      - name: Install backend dependencies
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+
+      # Runs the unit suite AND the labeled regression eval (tests/test_regression.py):
+      # program routing, language detection, the comparison attribute-query, and the
+      # deterministic intent detectors (career-outcome / who-teaches / leadership) -- the
+      # behaviours that repeatedly regressed. All deterministic (literal matching + regex,
+      # not free-text LLM output since IMPROVEMENTS.md #2), so they guard the real bug cases
+      # here with no GPU or Groq. The model-dependent eval (retrieval/answer quality) stays
+      # in scripts/eval.py, run manually -- see the note at the bottom of this file.
+      - name: Run unit tests + regression eval
+        run: pytest
+
+  frontend-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+# The FAST regression eval (deterministic routing, language, comparison attribute-query,
+# and intent-detector cases) DOES run above, in the pytest step -- see
+# tests/regression_cases.py, the single extensible place to record a query that broke.
+# What still runs only manually is the FULL, model-dependent eval (scripts/eval.py): it
+# drives the real ChatService, so it needs a seeded ChromaDB index, GPU-loaded embedding/
+# reranker models, and a real GROQ_API_KEY, i.e. secrets, a committed test-KB fixture, and
+# real Groq token spend on every push. That heavier lift is a separate, deliberate addition
+# if/when its cost is worth paying (IMPROVEMENTS.md #7.3), not bundled here -- the
+# deterministic half above is the CI-able slice of it.

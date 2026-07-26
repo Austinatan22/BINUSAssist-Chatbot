@@ -1,0 +1,56 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Internal development notes -- kept locally, not published
+PROJECT_LOG.md
+IMPROVEMENTS.md
+KB_EXPANSION_PLAN.md
+
+# Env
+.env
+
+# Vector store / data
+backend/vectorstore/
+backend/documents/*
+!backend/documents/.gitkeep
+backend/feedback.jsonl
+backend/query_log.jsonl
+backend/scraped_urls.json
+backend/url_cache.json
+
+# Local snapshot/rollback backups (large binaries / logs) -- never commit
+backend/vectorstore.bak-*/
+backend/query_log.jsonl.bak-*
+
+# Runtime account/upload data -- users.json holds a real (bcrypt-hashed) admin
+# credential for this deployment; avatar/ is user-uploaded at runtime. Neither is
+# source code, and a credential shouldn't be permanently baked into git history even
+# hashed. Provision accounts locally via scripts/manage_users.py after cloning.
+backend/users.json
+backend/avatar/*
+!backend/avatar/.gitkeep
+
+# Downloaded reference PDFs -- same category as backend/documents/* above (large
+# external binaries, not source); the .md notes in this folder ARE tracked.
+socs_documents/*.pdf
+
+# Eval run artifacts -- timestamped raw output from scripts/eval.py (working data, not docs).
+eval_results_*.json
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Scratch / debug artifacts
+*.log
+.verify_tmp/
+
+# Editor / tooling local settings (machine-specific, not shared project config)
+.vscode/
+.idea/

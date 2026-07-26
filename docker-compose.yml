@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./backend/documents:/app/backend/documents
+      - ./backend/vectorstore:/app/backend/vectorstore
+      - ./backend/feedback.jsonl:/app/backend/feedback.jsonl
+      - hf_cache:/root/.cache/huggingface
+    gpus: all
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  hf_cache:

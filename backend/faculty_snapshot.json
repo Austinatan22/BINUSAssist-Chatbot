@@ -1,0 +1,3786 @@
+[
+ {
+  "citation_unit": "D0453",
+  "code": "D0453",
+  "name": "Ir. Sablin Yusuf, M.Sc., M.Comp.Sc.",
+  "rank": null,
+  "dept": null,
+  "year": "2025",
+  "courses": [
+   "Compilation Techniques"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D1159",
+  "code": "D1159",
+  "name": "Dr. Ir. Diaz D. Santika, M.Sc.",
+  "rank": null,
+  "dept": null,
+  "year": "2023",
+  "courses": [
+   "Artificial Intelligence",
+   "Computer Vision",
+   "Deep Learning and Its Applications",
+   "Machine Learning",
+   "Optimization and Computational Intelligence"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D1526",
+  "code": "D1526",
+  "name": "Ir. Syaeful Karim, M.Comp.",
+  "rank": null,
+  "dept": null,
+  "year": "2023",
+  "courses": [
+   "Algorithm Design and Analysis",
+   "Meet Your Academic Advisor in Computer Science",
+   "Program Design Methods",
+   "Software Engineering"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D1633",
+  "code": "D1633",
+  "name": "Dr. Reina, S.Kom., M.M.",
+  "rank": "Lektor Kepala",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D1749",
+  "code": "D1749",
+  "name": "Dr. Johan Muliadi Kerta, S.Kom., M.M.",
+  "rank": "Lektor",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Cyber Security in Internet of Things",
+   "Foundations of Artificial Intelligence",
+   "Knowledge Management",
+   "Program Design Methods"
+  ],
+  "campuses": [
+   "Medan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D1789",
+  "code": "D1789",
+  "name": "Choirul Huda, S.Kom., M.M.",
+  "rank": "Lektor",
+  "dept": "Informatics",
+  "year": "2026",
+  "courses": [
+   "FYP Opening"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D1798",
+  "code": "D1798",
+  "name": "Jurike V. Moniaga, S.Kom., M.T.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Current Trends in Technology",
+   "EES in Information Technology Industry",
+   "Human and Computer Interaction",
+   "Industrial Experience in Information Technology",
+   "Information Technology Practice in Industrial Experience",
+   "Information Technology Practice in Professional Experience",
+   "Professional Development in Information Technology Industry",
+   "Professional Experience in Information Technology",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": "Enrichment Program Manager"
+ },
+ {
+  "citation_unit": "D1828",
+  "code": "D1828",
+  "name": "Hendra, S.Kom., M.T.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Foundations of Artificial Intelligence",
+   "Object Oriented Programming",
+   "Programming for Business"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D1832",
+  "code": "D1832",
+  "name": "Dr. Hady Pranoto, S.Kom., M.T.I.",
+  "rank": "Lektor Kepala",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Data Structures",
+   "Game Programming",
+   "Internet of Things (IoT)"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D1843",
+  "code": "D1843",
+  "name": "Gintoro, S.Kom., M.M.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Artificial Intelligence",
+   "Program Design Methods",
+   "Software Engineering"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D1892",
+  "code": "D1892",
+  "name": "Dr. Fredy Purnomo, S.Kom., M.Kom.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "FYP Opening"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D2042",
+  "code": "D2042",
+  "name": "Cuk Tho, S.Kom., M.M., M.Com (IS)",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Artificial Intelligence",
+   "Data Structures",
+   "Object Oriented Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D2211",
+  "code": "D2211",
+  "name": "Dr. Abdul Haris Rangkuti, S.Kom., M.M., M.Si.",
+  "rank": "Lektor Kepala",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Computer Vision in Internet of Things",
+   "Foundations of Artificial Intelligence",
+   "Interaction Design",
+   "Operating Systems",
+   "Research Methodology in Computer Science",
+   "Software Engineering"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D2425",
+  "code": "D2425",
+  "name": "Ir. Yasri, M.T.",
+  "rank": null,
+  "dept": null,
+  "year": "2023",
+  "courses": [
+   "Business Application Development",
+   "Introduction to Programming",
+   "Meet Your Academic Advisor in Computer Science",
+   "Software Engineering"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D2518",
+  "code": "D2518",
+  "name": "Rony Baskoro Lukito, S.Kom., M.Kom",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Foundations of Artificial Intelligence",
+   "General Orientation",
+   "Operating System"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D2626",
+  "code": "D2626",
+  "name": "Dr. Karto Iskandar, S.Kom., M.M.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Compilation Techniques",
+   "Machine Learning",
+   "Software Engineering"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D2632",
+  "code": "D2632",
+  "name": "Dr. Zulfany Erlisa Rasjid, B.Sc., MMSI.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "Agile Software Development"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D2637",
+  "code": "D2637",
+  "name": "Prof. Dr. Ir. Widodo Budiharto, S.Si., M.Kom., IPM., SMIEEE",
+  "rank": "Guru Besar",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Business Application Development",
+   "Foundations of Artificial Intelligence",
+   "IT Research Methodology",
+   "Information Systems Research Methodology",
+   "Internet of Things (IoT)",
+   "Knowledge and Information Retrieval"
+  ],
+  "campuses": [],
+  "struktural": "Lecturer Specialist – Professor"
+ },
+ {
+  "citation_unit": "D2749",
+  "code": "D2749",
+  "name": "Ayuliana, S.T., MMSI.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Compilation Techniques"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D2950",
+  "code": "D2950",
+  "name": "Cahya Lukito, S.T., M.T.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Embedded Systems",
+   "Foundations of Artificial Intelligence",
+   "Introduction to Cloud Infrastructure",
+   "Network and System Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3089",
+  "code": "D3089",
+  "name": "Rubil, S.T., M.T.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Computer Networks",
+   "Foundations of Artificial Intelligence",
+   "Operating System"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3092",
+  "code": "D3092",
+  "name": "Irma Irawati Ibrahim, SS., M.Kom.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Program Design Methods",
+   "Software Engineering"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3173",
+  "code": "D3173",
+  "name": "Ir. Surya Sujarwo, S.T., S.Kom., M.M., IPM",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm Design and Analysis"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3174",
+  "code": "D3174",
+  "name": "Dr. Ir. Budi Yulianto, S.Kom., M.M., CBA., IPM",
+  "rank": "Lektor Kepala",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm Design and Analysis",
+   "Foundations of Artificial Intelligence",
+   "IT Risk Management and Audit",
+   "Internet of Things (IoT)",
+   "Program Design Methods",
+   "Software Design"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3242",
+  "code": "D3242",
+  "name": "Jaka Hartanto, S.Kom., M.M.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": null,
+  "courses": [],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3243",
+  "code": "D3243",
+  "name": "Johannes Simatupang, S.Kom., M.Kom",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Compilation Techniques",
+   "Machine Learning"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3338",
+  "code": "D3338",
+  "name": "Dr. Ir. Edy Irwansyah, S.T., M.Si., IPM, ASEAN Eng.",
+  "rank": "Lektor Kepala",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Big Data Analytics",
+   "Database Design",
+   "Database Technology",
+   "Geographical Information System",
+   "Information Systems Project and Change Management",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3366",
+  "code": "D3366",
+  "name": "Bayu Kanigoro, S.Kom., M.T.",
+  "rank": "Lektor Kepala",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Foundations of Artificial Intelligence",
+   "Network Design",
+   "Operating System",
+   "Popular Network Technology"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3442",
+  "code": "D3442",
+  "name": "Herru Darmadi, S.Kom., M.TI",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Data Structures",
+   "Foundations of Artificial Intelligence",
+   "Multimedia Systems",
+   "Object Oriented Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3448",
+  "code": "D3448",
+  "name": "Dr. Aditya Kurniawan, S.Kom., MMSI., CND, CEHmaster",
+  "rank": "Lektor",
+  "dept": "Cyber Security",
+  "year": "2025",
+  "courses": [
+   "Computer Forensic",
+   "Cyber Security for Business",
+   "Enterprise Network",
+   "Fundamental of Cyber Security",
+   "IT Research Methodology",
+   "Machine Learning",
+   "Network and Cyber Security",
+   "Research Methodology in Computer Science",
+   "Software Engineering"
+  ],
+  "campuses": [],
+  "struktural": "Research and Innovation Laboratory Manager"
+ },
+ {
+  "citation_unit": "D3555",
+  "code": "D3555",
+  "name": "Alvin Chandra, S.Kom., M.M.",
+  "rank": "Asisten Ahli",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3557",
+  "code": "D3557",
+  "name": "Ir. Andry Chowanda, S.Kom., MM, Ph.D., MBCS, CCP, CME, IPM, SMIEEE",
+  "rank": "Lektor Kepala",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": "Head of CS Department - Greater Jakarta; Head of Data Science Program"
+ },
+ {
+  "citation_unit": "D3564",
+  "code": "D3564",
+  "name": "Dr. Evawaty Tanuar, S.Kom., M.Info.Tech",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "Adjustment & Well-Being",
+   "Computer Science Curriculum",
+   "Lecture System"
+  ],
+  "campuses": [],
+  "struktural": "Head of Computer Science Department - Binus Medan"
+ },
+ {
+  "citation_unit": "D3579",
+  "code": "D3579",
+  "name": "Dr. Ir. Alexander Agung Santoso Gunawan, S.Si., M.T., M.Sc., IPM, CIRR, CSA",
+  "rank": "Lektor Kepala",
+  "dept": "Data Science",
+  "year": "2025",
+  "courses": [
+   "Advanced Blockchain Programming",
+   "Advanced Knowledge System",
+   "Artificial Intelligence",
+   "Business Intelligence and Analytics",
+   "Computational Geometry",
+   "Deep Learning",
+   "Internet of Things (IoT)",
+   "Machine Learning",
+   "Model Deployment",
+   "Prescriptive Data Science",
+   "Research Methodology in Computer Science",
+   "Research Writing II",
+   "Speech and Audio Processing"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3658",
+  "code": "D3658",
+  "name": "Lusiana Citra Dewi, S.Kom., M.M.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Object Oriented Programming",
+   "Software Engineering"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3690",
+  "code": "D3690",
+  "name": "Dr. Ir. Derwin Suhartono, S.Kom., MTI",
+  "rank": "Guru Besar",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Advanced Knowledge System",
+   "Artificial Intelligence",
+   "Data Structures",
+   "Deep Learning",
+   "Deep Learning and Its Applications",
+   "EES in Information Technology Industry",
+   "Foundations of Artificial Intelligence",
+   "IT Research Methodology",
+   "Industrial Experience in Information Technology",
+   "Information Technology Practice in Industrial Experience",
+   "Information Technology Practice in Professional Experience",
+   "Machine Learning",
+   "Natural Language Processing",
+   "Professional Development in Information Technology Industry",
+   "Professional Experience in Information Technology",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": "Dean - School of Computer Science"
+ },
+ {
+  "citation_unit": "D3695",
+  "code": "D3695",
+  "name": "Arthur Salomo Hamonangan Gultom, S.Kom., M.T.I",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": null,
+  "courses": [],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3708",
+  "code": "D3708",
+  "name": "Albert Verasius Dian Sano, S.T., M.Kom.",
+  "rank": "Lektor",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Basic Statistics",
+   "Big Data Analytics for Business",
+   "Discrete Mathematics",
+   "Foundation of Artificial Intelligence",
+   "Scientific Computing",
+   "Statistics"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3746",
+  "code": "D3746",
+  "name": "Josef Bernadi Gautama, S.Kom., M.T.I",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2022",
+  "courses": [
+   "Algorithm and Programming",
+   "Meet Your Academic Advisor (Computer Science)",
+   "Web Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3757",
+  "code": "D3757",
+  "name": "Tegar Aryo Sulthon Musthofa, S.Kom, M.MSI",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2024",
+  "courses": [
+   "Meet Your Academic Advisor in Computer Science",
+   "Web Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D3783",
+  "code": "D3783",
+  "name": "Ir. Tri Asih Budiono, M.I.T.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm Design and Analysis",
+   "Compilation Techniques"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4456",
+  "code": "D4456",
+  "name": "Dennise Adrianto, S.Kom., M.T.I.",
+  "rank": "Lektor",
+  "dept": "Computer Science (PJJ)",
+  "year": "2026",
+  "courses": [
+   "Academic Orientation PJJ Computer Science",
+   "Academic Orientation PJJ Data Science"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4457",
+  "code": "D4457",
+  "name": "Dion Darmawan, S.Kom., M.T.I.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures",
+   "Object Oriented Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4458",
+  "code": "D4458",
+  "name": "Diana, S.Kom., M.T.I.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": "Head of Computer Science Program - Alam Sutera"
+ },
+ {
+  "citation_unit": "D4459",
+  "code": "D4459",
+  "name": "Gredion Prajena, S. Kom., M.T.I.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4460",
+  "code": "D4460",
+  "name": "Henry Chong, S.Kom., M.T.I.",
+  "rank": null,
+  "dept": null,
+  "year": "2022",
+  "courses": [
+   "Algorithm and Programming",
+   "Business Application Development",
+   "Data Structures",
+   "Meet Your Academic Advisor (Cyber Security)"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4498",
+  "code": "D4498",
+  "name": "David, S.Kom., M.T.I.",
+  "rank": "Lektor",
+  "dept": "Game Application  & Technology",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures"
+  ],
+  "campuses": [],
+  "struktural": "Head of Game Application & Technology Program - Mobile Application & Technology Program"
+ },
+ {
+  "citation_unit": "D4501",
+  "code": "D4501",
+  "name": "Muhsin Shodiq, S.Kom., M.Sc.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2023",
+  "courses": [
+   "Algorithm Design and Analysis",
+   "Meet Your Academic Advisor in Computer Science",
+   "Meet Your Academic Advisor in Computer Science (Global Class)"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4520",
+  "code": "D4520",
+  "name": "Violitta Yesmaya, S.Kom., M.T.I.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "Computer Science Curriculum",
+   "Fundamental Course for Computer Science",
+   "Planning Your Future",
+   "Study Skills"
+  ],
+  "campuses": [
+   "Semarang"
+  ],
+  "struktural": "Head of Computer Science Department - Binus Semarang"
+ },
+ {
+  "citation_unit": "D4524",
+  "code": "D4524",
+  "name": "Sonya Rapinta Manalu, S.Kom., M.T.I",
+  "rank": "Lektor",
+  "dept": "Mobile Application & Technology",
+  "year": "2025",
+  "courses": [
+   "Mobile Programming",
+   "Program Design Methods",
+   "Research Methodology in Computer Science",
+   "Software Engineering"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4554",
+  "code": "D4554",
+  "name": "Alvina Aulia, S.Kom., M.TI.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "Computer Science Curriculum"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4572",
+  "code": "D4572",
+  "name": "Dr. Meiliana, S.Kom., M.Sc.",
+  "rank": "Lektor Kepala",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": "Deputy Dean - Collaboration & Global Recognition"
+ },
+ {
+  "citation_unit": "D4587",
+  "code": "D4587",
+  "name": "Indra Dwi Rianto, S.Kom., S.Si., M.T.I.",
+  "rank": "Asisten Ahli",
+  "dept": "Cyber Security",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4653",
+  "code": "D4653",
+  "name": "Eka Cahyadi, S.Kom., M.TI",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Compilation Techniques",
+   "Foundations of Artificial Intelligence"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4689",
+  "code": "D4689",
+  "name": "Rulyna, S.Kom., M.M.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Foundations of Artificial Intelligence"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4692",
+  "code": "D4692",
+  "name": "Mayliana, S.Kom., M.T.I",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4730",
+  "code": "D4730",
+  "name": "Rini Wongso, S.Kom., M.T.I",
+  "rank": "Lektor Kepala",
+  "dept": "Computer Science (PJJ)",
+  "year": "2025",
+  "courses": [
+   "Foundations of Artificial Intelligence",
+   "Introduction to Programming for Business",
+   "Thesis"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4740",
+  "code": "D4740",
+  "name": "Rhio Sutoyo, S.Kom., M.Sc.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Business Intelligence and Analytics",
+   "Data Structures",
+   "Data Visualization",
+   "Independent Session: Data Visualization",
+   "Internet of Things (IoT)",
+   "Machine Learning",
+   "Object Oriented Programming",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4749",
+  "code": "D4749",
+  "name": "Dr. Anita Rahayu, S.Si., M.Si.",
+  "rank": "Lektor",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Basic Statistics",
+   "Calculus",
+   "Linear Algebra",
+   "Scientific Computing",
+   "Statistics"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4833",
+  "code": "D4833",
+  "name": "Muhammad Danaparamita, S.Kom., M.T.I",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2022",
+  "courses": [
+   "Business Application Development",
+   "Introduction to Mobile Technology & Programming",
+   "Meet Your Academic Advisor (Computer Science)",
+   "Mobile Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4836",
+  "code": "D4836",
+  "name": "Siti Safariana Rahmawati, S.Kom., M.TI.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Compilation Techniques",
+   "Foundations of Artificial Intelligence"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4837",
+  "code": "D4837",
+  "name": "Eileen Heriyanni, S.Kom., M.T.I",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Foundations of Artificial Intelligence",
+   "Program Design Methods",
+   "Software Design"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4854",
+  "code": "D4854",
+  "name": "Fransisca Fortunata Dewi, S.Si., S.Kom, M.T.I.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": null,
+  "courses": [],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4881",
+  "code": "D4881",
+  "name": "Angry Ronald, S.Kom., M.T.I",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2024",
+  "courses": [
+   "Introduction to Programming"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D4985",
+  "code": "D4985",
+  "name": "Novita Hanafiah, S.Kom.,M.Sc.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": null,
+  "courses": [],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5025",
+  "code": "D5025",
+  "name": "Yovita Tunardi, S.Kom., M.T.I",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Data Structures"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5026",
+  "code": "D5026",
+  "name": "Rita Layona, S.Kom., M.T.I",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5058",
+  "code": "D5058",
+  "name": "Jonathan Samuel Lumentut, S.Kom., M.TI., Ph.D.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2024",
+  "courses": [
+   "Algorithm and Programming",
+   "Meet Your Academic Advisor in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5065",
+  "code": "D5065",
+  "name": "Yanfi, S.Kom., M.T.I.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Business Application Development",
+   "Data Science and Applications",
+   "Foundations of Artificial Intelligence"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5068",
+  "code": "D5068",
+  "name": "Azani Cempaka Sari, S.Kom., M.T.I.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Foundations of Artificial Intelligence",
+   "Human and Computer Interaction",
+   "Research Methodology in Computer Science",
+   "Software Engineering"
+  ],
+  "campuses": [],
+  "struktural": "Academic Assurance Manager"
+ },
+ {
+  "citation_unit": "D5094",
+  "code": "D5094",
+  "name": "Aswin Wibisurya, S.Kom, M.TI",
+  "rank": "Asisten Ahli",
+  "dept": "Mobile Application & Technology",
+  "year": null,
+  "courses": [],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5097",
+  "code": "D5097",
+  "name": "Timothy Yudi Adinugroho, S.Kom., M.TI",
+  "rank": "Asisten Ahli",
+  "dept": "Mobile Application & Technology",
+  "year": "2025",
+  "courses": [
+   "Mobile Hybrid Solution",
+   "Mobile Programming",
+   "Object Oriented Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5158",
+  "code": "D5158",
+  "name": "Irma Kartika Wairooy, S.Kom., M.T.I.",
+  "rank": "Asisten Ahli",
+  "dept": "Mobile Application & Technology",
+  "year": "2025",
+  "courses": [
+   "Foundations of Artificial Intelligence",
+   "Information Technology Practice in Professional Experience",
+   "Introduction to Software Engineering",
+   "Mobile Creative Design",
+   "Professional Development in Information Technology Industry",
+   "Professional Experience in Information Technology",
+   "Program Design Methods",
+   "Research Methodology in Computer Science",
+   "User Experience"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5186",
+  "code": "D5186",
+  "name": "Pualam Dipa Nusantara, S.Kom., M.Kom",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Foundations of Artificial Intelligence",
+   "Specialized Platform Development",
+   "Web Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5298",
+  "code": "D5298",
+  "name": "Thomas Galih Satria, S.Kom., M.TI",
+  "rank": "Asisten Ahli",
+  "dept": "Game Application  & Technology",
+  "year": "2025",
+  "courses": [
+   "2D Game Art",
+   "Algorithm and Programming",
+   "Game Animation"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5299",
+  "code": "D5299",
+  "name": "Ferdy Nirwansyah, S.T., M.TI",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Database Technology",
+   "Foundations of Artificial Intelligence"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5301",
+  "code": "D5301",
+  "name": "Francisco Maruli Panggabean, S.Kom., M.TI",
+  "rank": "Lektor",
+  "dept": "Game Application  & Technology",
+  "year": "2026",
+  "courses": [
+   "Game Application and Technology Curriculum"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5318",
+  "code": "D5318",
+  "name": "Jeklin Harefa, S.Kom., M.TI.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures",
+   "EES in Information Technology Industry",
+   "Industrial Experience in Information Technology",
+   "Information Technology Practice in Industrial Experience",
+   "Information Technology Practice in Professional Experience",
+   "Professional Development in Information Technology Industry",
+   "Professional Experience in Information Technology"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5319",
+  "code": "D5319",
+  "name": "Alexander, S.Kom., M.TI",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures",
+   "Introduction to Data Science"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5320",
+  "code": "D5320",
+  "name": "Julian Wesley, S.Kom., M.TI.",
+  "rank": "Asisten Ahli",
+  "dept": "Game Application  & Technology",
+  "year": "2023",
+  "courses": [
+   "Algorithm and Programming",
+   "Meet Your Academic Advisor in Computer Science",
+   "Object Oriented Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5327",
+  "code": "D5327",
+  "name": "Gradiyanto Sanjaya, S.Kom, M.TI",
+  "rank": "Tenaga Pengajar",
+  "dept": "Game Application  & Technology",
+  "year": "2022",
+  "courses": [
+   "Algorithm and Programming",
+   "Program Design Methods"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5337",
+  "code": "D5337",
+  "name": "Yudy Purnama, S.Kom, M.TI",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science (PJJ)",
+  "year": "2025",
+  "courses": [
+   "Academic Orientation PJJ Computer Science",
+   "Algorithm and Programming",
+   "Big Data Technologies",
+   "Capita Selecta in Computer Science",
+   "Generative Artificial Intelligence",
+   "Software Engineering",
+   "Specialized Platform Development",
+   "Thesis"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5339",
+  "code": "D5339",
+  "name": "Lili Ayu Wulandhari, S.Si., M.Sc., Ph.D",
+  "rank": "Lektor Kepala",
+  "dept": "Data Science",
+  "year": "2025",
+  "courses": [
+   "Advanced Softcomputing",
+   "Big Data Analytics",
+   "Deep Learning",
+   "Deep Learning and Its Applications",
+   "Internet of Things (IoT)",
+   "Machine Learning",
+   "Model Deployment",
+   "Prescriptive Data Science",
+   "Research Methodology in Computer Science",
+   "Text Mining"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5358",
+  "code": "D5358",
+  "name": "Livia Ashianti, S.Kom., M.TI",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Object Oriented Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5381",
+  "code": "D5381",
+  "name": "Aisha Gemala Jondya, S.Kom., M.TI",
+  "rank": null,
+  "dept": null,
+  "year": "2023",
+  "courses": [
+   "Algorithm and Programming",
+   "Game Design",
+   "Game Design Programming",
+   "Meet Your Academic Advisor in Computer Science",
+   "User Experience"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5387",
+  "code": "D5387",
+  "name": "Harvianto, S.Kom, M.T.I.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures",
+   "Object Oriented Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5416",
+  "code": "D5416",
+  "name": "Kanyadian Idananta, S.Kom., M.TI",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm Design and Analysis",
+   "Foundations of Artificial Intelligence"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5427",
+  "code": "D5427",
+  "name": "Edo Barfian, S.Kom, M.TI, CHCM, CPHCM, CHCBP, FMVA",
+  "rank": null,
+  "dept": null,
+  "year": null,
+  "courses": [],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5428",
+  "code": "D5428",
+  "name": "Brilly Andro Makalew, S.Kom., M.T.I.",
+  "rank": "Asisten Ahli",
+  "dept": "Mobile Application & Technology",
+  "year": "2025",
+  "courses": [
+   "Foundations of Artificial Intelligence",
+   "Introduction to Mobile Technology & Programming",
+   "Market Research",
+   "Program Design Methods",
+   "Research Methodology in Computer Science",
+   "Software Engineering"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5457",
+  "code": "D5457",
+  "name": "Nyoman Ayu Gita Gayatri, S.Kom., M.Kom",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Human and Computer Interaction",
+   "Program Design Methods"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5536",
+  "code": "D5536",
+  "name": "Dr. Bambang Dwi Wijanarko, S.Si., M.Kom",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Data Structures and Algorithm Analysis",
+   "Foundations of Artificial Intelligence",
+   "Industry 4.0 and Implementation",
+   "Thesis"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5542",
+  "code": "D5542",
+  "name": "Fidelson Tanzil, S.Kom., M.TI",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5543",
+  "code": "D5543",
+  "name": "Yohan Muliono, S.Kom., M.TI., CND, CEHmaster, eMAPT, CAP, EHE, DFE",
+  "rank": "Lektor",
+  "dept": "Cyber Security",
+  "year": "2025",
+  "courses": [
+   "Computer Security",
+   "Computer Security Fundamental",
+   "Network Administration",
+   "Network Penetration Testing",
+   "Research Methodology in Computer Science",
+   "Server and Network Administration",
+   "Software Security"
+  ],
+  "campuses": [],
+  "struktural": "Head of Cyber Security Program"
+ },
+ {
+  "citation_unit": "D5544",
+  "code": "D5544",
+  "name": "Tjeng Wawan Cenggoro, S.Kom., M.TI",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Big Data Processing",
+   "Deep Learning",
+   "Foundations of Artificial Intelligence"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5546",
+  "code": "D5546",
+  "name": "Ardian Yunanto, S.Kom., M.TI",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": null,
+  "courses": [],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5548",
+  "code": "D5548",
+  "name": "Kornelius Irfandhi, S.Kom., M.TI",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Business Application Development",
+   "Code Reengineering",
+   "Foundations of Artificial Intelligence",
+   "Framework Layer Architecture",
+   "Programming for Business"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5549",
+  "code": "D5549",
+  "name": "Irvan Santoso, S.Kom., M.TI",
+  "rank": "Lektor",
+  "dept": "Cyber Security",
+  "year": "2025",
+  "courses": [
+   "Artificial Intelligence"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5550",
+  "code": "D5550",
+  "name": "Fanny, S. Kom., M.TI",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5551",
+  "code": "D5551",
+  "name": "Yogi Udjaja, S.Kom., M.TI",
+  "rank": "Lektor",
+  "dept": "Game Application  & Technology",
+  "year": null,
+  "courses": [],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5677",
+  "code": "D5677",
+  "name": "Indrabudhi Lokaadinugroho, BS.MEM, M.TI",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2024",
+  "courses": [
+   "Algorithm Design and Analysis",
+   "Meet Your Academic Advisor in Computer Science",
+   "Network Design",
+   "Operating System"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5683",
+  "code": "D5683",
+  "name": "Melki Sadekh Mansuan, S.Kom., M.TI",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Human and Computer Interaction",
+   "Program Design Methods"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5707",
+  "code": "D5707",
+  "name": "Elizabeth Paskahlia Gunawan, S.Kom., M.Cs.",
+  "rank": "Asisten Ahli",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Algorithm Design and Analysis",
+   "Algorithm and Programming",
+   "Artificial Intelligence",
+   "Data Structures"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5782",
+  "code": "D5782",
+  "name": "Nadia, S.Kom., M.TI, EHE, DFE",
+  "rank": "Lektor",
+  "dept": "Cyber Security",
+  "year": "2026",
+  "courses": [
+   "Cyber Security Curriculum"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5790",
+  "code": "D5790",
+  "name": "Muhammad Taufiq Zulfikar, S.Kom., S.Si., M.T.I.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures",
+   "Mobile Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5848",
+  "code": "D5848",
+  "name": "Sidharta, S.Si., M.MT.",
+  "rank": "Lektor",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Calculus",
+   "Compilation Techniques",
+   "Computer Networks",
+   "Database Design",
+   "Discrete Mathematics",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5850",
+  "code": "D5850",
+  "name": "Hanugra Aulia Sidharta, S.T., M.MT.",
+  "rank": "Asisten Ahli",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Artificial Intelligence",
+   "Compilation Techniques",
+   "Foundation of Artificial Intelligence",
+   "Software Engineering"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5872",
+  "code": "D5872",
+  "name": "Hanry Ham, S.Kom., M.Eng.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2024",
+  "courses": [
+   "Artificial Intelligence",
+   "Computer Vision",
+   "Foundations of Artificial Intelligence",
+   "Machine Learning",
+   "Meet Your Academic Advisor in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5874",
+  "code": "D5874",
+  "name": "Irene Anindaputri Iswanto, S.Kom., M.Sc.Eng.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": "Head of Computer Science Program - Kemanggisan"
+ },
+ {
+  "citation_unit": "D5878",
+  "code": "D5878",
+  "name": "Dewi Suryani, S.Kom., M.Eng.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2024",
+  "courses": [
+   "Meet Your Academic Advisor in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5888",
+  "code": "D5888",
+  "name": "Michael Reynaldo Phangtriastu, S.Kom., M.TI",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": null,
+  "courses": [],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5918",
+  "code": "D5918",
+  "name": "Boby Siswanto, S.T., M.T.",
+  "rank": "Lektor",
+  "dept": "Informatics",
+  "year": "2026",
+  "courses": [
+   "Digital Psychology Curriculum"
+  ],
+  "campuses": [
+   "Medan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5939",
+  "code": "D5939",
+  "name": "Nuraini, S.Si., M.TI.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": null,
+  "courses": [],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5970",
+  "code": "D5970",
+  "name": "Wawiko Supeno, S.Si., MTI.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": null,
+  "courses": [],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D5975",
+  "code": "D5975",
+  "name": "Wina Permana Sari, S.T., M.Kom.",
+  "rank": "Lektor",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Database Design",
+   "Database Technology",
+   "Foundation of Artificial Intelligence",
+   "Human and Computer Interaction",
+   "Linear Algebra",
+   "Program Design Methods",
+   "Software Engineering"
+  ],
+  "campuses": [
+   "Malang"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6006",
+  "code": "D6006",
+  "name": "Ranny, S.Kom., M.Kom.",
+  "rank": null,
+  "dept": null,
+  "year": "2023",
+  "courses": [
+   "Artificial Intelligence",
+   "Data Structures"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6066",
+  "code": "D6066",
+  "name": "Fairuz Iqbal Maulana, S.T., M.T., M.Eng.",
+  "rank": "Lektor",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Foundation of Artificial Intelligence",
+   "Interior in Digital Interactive",
+   "User Experience Design"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6114",
+  "code": "D6114",
+  "name": "Vini Indriasari, S.T., M.Sc., Ph.D.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Big Data Analytics",
+   "Business Analytics (OL)",
+   "Business Intelligence and Analytics",
+   "Data Structures",
+   "Foundations of Artificial Intelligence",
+   "Geographical Information System"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6132",
+  "code": "D6132",
+  "name": "Yasi Dani, S.Si., M.Si.",
+  "rank": "Lektor",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Calculus",
+   "Discrete Mathematics",
+   "Linear Algebra"
+  ],
+  "campuses": [
+   "Bandung"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6183",
+  "code": "D6183",
+  "name": "Davy Ronald Hermanus, S.Si., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Foundations of Artificial Intelligence",
+   "Human and Computer Interaction",
+   "Interaction Design",
+   "Program Design Methods"
+  ],
+  "campuses": [
+   "Bandung"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6184",
+  "code": "D6184",
+  "name": "Mochammad Haldi Widianto, S.T., M.T.",
+  "rank": "Lektor Kepala",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Computer Networks",
+   "Embedded System",
+   "Foundations of Artificial Intelligence",
+   "Internet of Things (IoT)",
+   "IoT Development and Architecture",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [
+   "Medan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6191",
+  "code": "D6191",
+  "name": "Reinert Yosua Rumagit, S.Kom, M.TI",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "Computer Science Curriculum"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6198",
+  "code": "D6198",
+  "name": "Fepri Putra Panghurian, S.Kom., M.T.I.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Mining",
+   "Database Technology",
+   "Foundations of Artificial Intelligence"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6230",
+  "code": "D6230",
+  "name": "Dr. Maria Artanta Ginting, S.Si., M.Si.,",
+  "rank": null,
+  "dept": null,
+  "year": "2024",
+  "courses": [
+   "Basic Statistics",
+   "Calculus",
+   "Discrete Mathematics"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6261",
+  "code": "D6261",
+  "name": "Mirza Ramadhani, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Human and Computer Interaction",
+   "Program Design Methods",
+   "User Experience",
+   "User Experience Design"
+  ],
+  "campuses": [
+   "Malang"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6274",
+  "code": "D6274",
+  "name": "Husni Iskandar Pohan, S.Kom., M.T.",
+  "rank": "Lektor",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Application Development in Cloud",
+   "Artificial Intelligence",
+   "Data Structures",
+   "Human and Computer Interaction",
+   "Programming for Business"
+  ],
+  "campuses": [
+   "Bandung"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6320",
+  "code": "D6320",
+  "name": "Dwi Nurmelly Handayani, S.Kom., MTI",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Program Design Methods",
+   "Software Engineering"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6331",
+  "code": "D6331",
+  "name": "Annisa Istiqomah Arrahmah, S.T., M.T.",
+  "rank": null,
+  "dept": null,
+  "year": "2024",
+  "courses": [
+   "Calculus and Scientific Computing",
+   "Data Structures"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6359",
+  "code": "D6359",
+  "name": "Richard Anderson, S.Kom, MMSI.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": null,
+  "courses": [],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6365",
+  "code": "D6365",
+  "name": "Chasandra Puspitasari, S.Kom., M.Cs.",
+  "rank": "Lektor",
+  "dept": "Informatics",
+  "year": "2026",
+  "courses": [
+   "Computer Science Curriculum"
+  ],
+  "campuses": [],
+  "struktural": "Head of Computer Science Department - Binus Malang"
+ },
+ {
+  "citation_unit": "D6371",
+  "code": "D6371",
+  "name": "Frihandhika Permana, S.Pd., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Foundation of Artificial Intelligence",
+   "Human and Computer Interaction",
+   "Interior in Digital Interactive",
+   "User Experience",
+   "User Experience Design"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6372",
+  "code": "D6372",
+  "name": "Leo Andika, S.Kom., M.Eng.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": null,
+  "courses": [],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6375",
+  "code": "D6375",
+  "name": "Heri Ngarianto, S.Kom, M.TI",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Artificial Intelligence",
+   "Embedded Systems",
+   "Foundations of Artificial Intelligence"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6394",
+  "code": "D6394",
+  "name": "M. Aldiki Febriantono, S.T., M.T.",
+  "rank": "Lektor",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Computational Biology",
+   "Computational Physics",
+   "Operating System",
+   "Program Design Methods",
+   "Scientific Computing"
+  ],
+  "campuses": [
+   "Malang"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6396",
+  "code": "D6396",
+  "name": "Dwinanda Kinanti Suci Sekarhati, S.Kom., M.T.I.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Foundations of Artificial Intelligence",
+   "Programming for Business",
+   "Web Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6404",
+  "code": "D6404",
+  "name": "Gusti Pangestu, S.Kom., M.Kom.",
+  "rank": "Lektor",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Agile Software Development",
+   "Computational Physics",
+   "Mobile Application Programming",
+   "Object Oriented Programming",
+   "Popular Programming Technology",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6407",
+  "code": "D6407",
+  "name": "Dr. Dany Eka Saputra, S.T., M.T.",
+  "rank": "Lektor Kepala",
+  "dept": "Informatics",
+  "year": "2026",
+  "courses": [
+   "Computer Science Curriculum"
+  ],
+  "campuses": [
+   "Medan"
+  ],
+  "struktural": "Head of Computer Science Department - Binus Bandung"
+ },
+ {
+  "citation_unit": "D6408",
+  "code": "D6408",
+  "name": "Rissa Rahmania, S.T., M.T.",
+  "rank": "Asisten Ahli",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Compilation Techniques",
+   "Computer Networks",
+   "Computer Vision in Internet of Things",
+   "Introduction to Cloud Computing",
+   "Introduction to Cloud security",
+   "Scientific Computing",
+   "Software Development Operations in Cloud Environments"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6414",
+  "code": "D6414",
+  "name": "Kristien Margi Suryaningrum, S.Kom., M.Cs.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Compilation Techniques",
+   "Database Technology",
+   "Foundations of Artificial Intelligence",
+   "Human and Computer Interaction",
+   "Introduction to Software Engineering",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [
+   "Bekasi"
+  ],
+  "struktural": "Head of Software Engineering Program"
+ },
+ {
+  "citation_unit": "D6416",
+  "code": "D6416",
+  "name": "Puti Andam Suri, S.Kom, M.TI",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Artificial Intelligence",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6421",
+  "code": "D6421",
+  "name": "Muhammad Fikri Hasani, S.Kom., M.T.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Computer Graphics",
+   "Data Structures",
+   "Introduction to Programming",
+   "Research Methodology in Computer Science",
+   "Web Programming"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6422",
+  "code": "D6422",
+  "name": "Ajeng Wulandari, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Artificial Intelligence",
+   "Data Structures"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6423",
+  "code": "D6423",
+  "name": "Hidayaturrahman, S.Kom., M.T.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "Computer Science Curriculum",
+   "Data Mining"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6426",
+  "code": "D6426",
+  "name": "Kenny Jingga, S.Kom., M.T.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "Computer Science Curriculum"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6439",
+  "code": "D6439",
+  "name": "Yesun Utomo, S.Kom, M.T.I.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Data Structures",
+   "Object Oriented Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6456",
+  "code": "D6456",
+  "name": "Andika Elok Amalia, ST, M.T.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm Design and Analysis",
+   "Algorithm and Programming",
+   "Foundations of Artificial Intelligence"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6469",
+  "code": "D6469",
+  "name": "Muhammad Maulana Ramadhan, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Algorithm Design and Analysis",
+   "Compilation Techniques",
+   "Interaction Design",
+   "Mobile Programming",
+   "Multimedia & Mixed Reality"
+  ],
+  "campuses": [
+   "Bandung"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6471",
+  "code": "D6471",
+  "name": "Putri Sanggabuana Setiawan, S.Kom., M.TI",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm Design and Analysis",
+   "Foundations of Artificial Intelligence"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6485",
+  "code": "D6485",
+  "name": "Ivan Halim Parmonangan, S.Kom., M.Eng.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2023",
+  "courses": [
+   "Algorithm and Programming",
+   "Computer Science Curriculum",
+   "Data Mining",
+   "Fundamental Course for Computer Science (Global Class)",
+   "Meet Your Academic Advisor in Computer Science",
+   "Research Methodology in Computer Science",
+   "Welcome to Computer Science (Global Class) Family"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6494",
+  "code": "D6494",
+  "name": "Nyoman Wira Prasetya, S.Kom., M.T.",
+  "rank": "Asisten Ahli",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Computational Physics",
+   "Computer Networks",
+   "Operating System",
+   "Programming for Business",
+   "Web Programming"
+  ],
+  "campuses": [
+   "Malang"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6532",
+  "code": "D6532",
+  "name": "Dr. Dani Suandi, S.Si., M.Si.",
+  "rank": "Lektor",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Basic Statistics",
+   "Discrete Mathematics",
+   "Linear Algebra",
+   "Scientific Computing"
+  ],
+  "campuses": [
+   "Medan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6556",
+  "code": "D6556",
+  "name": "Danang Wahyu Wicaksono, S.Si., M.Si.",
+  "rank": null,
+  "dept": null,
+  "year": "2024",
+  "courses": [
+   "Algorithm Design and Analysis",
+   "Data Visualization",
+   "Linear Algebra",
+   "Object Oriented Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6580",
+  "code": "D6580",
+  "name": "Muhammad Amien Ibrahim, S.Kom., M.Sc.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2024",
+  "courses": [
+   "Framework Layer Architecture",
+   "Fundamental Course for Computer Science",
+   "Meet Your Academic Advisor in Computer Science",
+   "Natural Language Processing",
+   "Object Oriented Analysis & Design",
+   "Pattern Software Design",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6616",
+  "code": "D6616",
+  "name": "Kartika Purwandari, S.Kom., M.Sc.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures",
+   "Object Oriented Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6622",
+  "code": "D6622",
+  "name": "Felix Indra Kurniadi, S.Kom., M.Kom.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2023",
+  "courses": [
+   "Computer Science Curriculum",
+   "Deep Learning",
+   "Deep Learning and Optimization Methods",
+   "Introduction to Statistical Programming",
+   "Machine Learning",
+   "Meet Your Academic Advisor in Computer Science",
+   "Welcome to Computer Science Family"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6640",
+  "code": "D6640",
+  "name": "Cindy Rahayu, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Human and Computer Interaction",
+   "Object Oriented Programming",
+   "Programming for Business"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6657",
+  "code": "D6657",
+  "name": "Anderies, B.Eng., S.Kom., M.Kom.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Framework Layer Architecture",
+   "Mobile Hybrid Solution",
+   "Object Oriented Programming",
+   "Research Methodology in Computer Science",
+   "Software Architecture",
+   "Web Programming"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6658",
+  "code": "D6658",
+  "name": "Dimas Ramdhan, S.Kom., M.Kom.",
+  "rank": "Lektor",
+  "dept": "Game Application  & Technology",
+  "year": "2025",
+  "courses": [
+   "3D Modeling for Games",
+   "Game Animation",
+   "Game Development Capstone Project",
+   "Serious Game & Gamification",
+   "Storyboards & Concept Art"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6659",
+  "code": "D6659",
+  "name": "Eko Setyo Purwanto, S.Pd., M.Kom.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Data Analytics",
+   "Database Technology",
+   "EES in Information Technology Industry",
+   "Embedded System and Internet of Things",
+   "Industrial Experience in Information Technology",
+   "Information Technology Practice in Industrial Experience",
+   "Information Technology Practice in Professional Experience",
+   "Professional Development in Information Technology Industry",
+   "Professional Experience in Information Technology"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6660",
+  "code": "D6660",
+  "name": "Henry Lucky, S.Kom, M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "Data Mining",
+   "Data Science Curriculum",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6661",
+  "code": "D6661",
+  "name": "Ika Dyah Agustia Rachmawati, S.Kom., M.Kom., EHE, DFE",
+  "rank": "Asisten Ahli",
+  "dept": "Cyber Security",
+  "year": "2026",
+  "courses": [
+   "Cyber Security Curriculum"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6662",
+  "code": "D6662",
+  "name": "Ivan Sebastian Edbert, S.Kom, M.Kom.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "Artificial Intelligence Curriculum"
+  ],
+  "campuses": [],
+  "struktural": "Head of Artificial Intelligence Program"
+ },
+ {
+  "citation_unit": "D6663",
+  "code": "D6663",
+  "name": "Muhamad Fajar, S.Kom., M.Kom",
+  "rank": "Lektor",
+  "dept": "Game Application  & Technology",
+  "year": "2025",
+  "courses": [
+   "Advanced Game Development",
+   "Game Animation",
+   "Game Programming",
+   "Object Oriented Game Programming",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6664",
+  "code": "D6664",
+  "name": "Muhamad Keenan Ario, S.Kom, M.Kom.",
+  "rank": "Lektor",
+  "dept": "Mobile Application & Technology",
+  "year": "2026",
+  "courses": [
+   "Web Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6665",
+  "code": "D6665",
+  "name": "Rezki Yunanda, S.Kom., M.Kom",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Artificial Intelligence",
+   "Automation Testing",
+   "Machine Learning",
+   "Mobile Applications Development",
+   "Object Oriented Analysis & Design",
+   "Program Design Methods",
+   "Text Mining"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6666",
+  "code": "D6666",
+  "name": "Risma Yulistiani, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Artificial Intelligence"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6667",
+  "code": "D6667",
+  "name": "Said Achmad, S.Kom., M.Kom",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "Database Technology"
+  ],
+  "campuses": [
+   "Bekasi"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6668",
+  "code": "D6668",
+  "name": "Ade Putera Kemala, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Data Science",
+  "year": "2025",
+  "courses": [
+   "Big Data Infrastructure and Technology",
+   "Data Management and Organization",
+   "Data Security",
+   "Operating System",
+   "Scientific Computing"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6669",
+  "code": "D6669",
+  "name": "Muhammad Edo Syahputra, S.T., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Foundations of Artificial Intelligence",
+   "Operating System"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6670",
+  "code": "D6670",
+  "name": "Budi Juarto, S.T., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Cloud Services",
+   "Data Structures",
+   "Operating Systems"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6671",
+  "code": "D6671",
+  "name": "Yulianto, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Computational Physics",
+   "Computer Networks",
+   "Foundation of Artificial Intelligence",
+   "Programming for Business"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6672",
+  "code": "D6672",
+  "name": "Anang Prasetyo, S.Kom, M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "Computer Science Curriculum",
+   "Fundamental Course for Computer Science",
+   "Planning Your Future",
+   "Study Skills"
+  ],
+  "campuses": [
+   "Semarang"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6673",
+  "code": "D6673",
+  "name": "Bakti Amirul Jabar, S.Si., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Artificial Intelligence",
+   "Computational Physics",
+   "Machine Learning",
+   "Physics",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6674",
+  "code": "D6674",
+  "name": "Nurhasanah, S.Si., M.Kom",
+  "rank": null,
+  "dept": null,
+  "year": "2023",
+  "courses": [
+   "Discrete Mathematics and Linear Algebra",
+   "Fundamental Course for Computer Science & Statistics",
+   "Linear Algebra",
+   "Linear and Discrete Mathematics",
+   "Machine Learning",
+   "Meet Your Academic Advisor in Computer Science & Statistics",
+   "Welcome to Computer Science & Statistics Family"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6685",
+  "code": "D6685",
+  "name": "Silviya Hasana, S.Kom, M.Eng.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2023",
+  "courses": [
+   "Artificial Intelligence",
+   "Computer Science Curriculum",
+   "Data Mining",
+   "Fundamental Course for Computer Science",
+   "Meet Your Academic Advisor in Computer Science",
+   "Meet Your Academic Advisor in Computer Science (Global Class)",
+   "Welcome to Computer Science Family"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6689",
+  "code": "D6689",
+  "name": "Rizwan Arisandi, S.Si, M.Si.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Basic Statistics",
+   "Calculus",
+   "Discrete Mathematics",
+   "Linear Algebra"
+  ],
+  "campuses": [
+   "Semarang"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6694",
+  "code": "D6694",
+  "name": "Rani Puspita, S.Kom., M.Kom.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Artificial Intelligence",
+   "Foundations of Artificial Intelligence",
+   "Human and Computer Interaction",
+   "Web Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6698",
+  "code": "D6698",
+  "name": "Aurelia Michele, S.Kom, M.Kom.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": "2022",
+  "courses": [
+   "Artificial Intelligence",
+   "Data Structures",
+   "Meet Your Academic Advisor (Computer Science)"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6704",
+  "code": "D6704",
+  "name": "Abram Setyo Prabowo, S.Kom, M.Cs.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Artificial Intelligence",
+   "Database Technology",
+   "Foundations of Artificial Intelligence"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6705",
+  "code": "D6705",
+  "name": "Dr. Nur Afny Catur Andryani, S.Si., M.Sc.",
+  "rank": "Lektor Kepala",
+  "dept": "Doctor of Computer Science",
+  "year": "2025",
+  "courses": [
+   "Big Data Analytics",
+   "Computer Vision",
+   "Computer Vision for Vehicle",
+   "Deep Learning and Its Applications",
+   "IT Research Methodology",
+   "Machine Learning",
+   "Research Methodology"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6717",
+  "code": "D6717",
+  "name": "Dicky Surya Dwi Putra, S.Kom., M.Kom.",
+  "rank": "Lektor",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Foundations of Artificial Intelligence",
+   "Object Oriented Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6729",
+  "code": "D6729",
+  "name": "Chrisando Ryan Pardomuan Siahaan, S.Kom, M.Kom.",
+  "rank": null,
+  "dept": null,
+  "year": "2024",
+  "courses": [
+   "Blockchain Fundamental",
+   "Computer Forensic",
+   "Computer Security Fundamental",
+   "Fundamental Course for Cyber Security",
+   "Meet Your Academic Advisor in Computer Science",
+   "Meet Your Academic Advisor in Cyber Security",
+   "Research Methodology in Computer Science",
+   "Reverse Engineering and Binary Exploitation",
+   "Secure Programming",
+   "Welcome to Cyber Security Family"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6745",
+  "code": "D6745",
+  "name": "Dimas Elang Setyoko, S.Kom., M.Cs.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm Design and Analysis",
+   "Data Structures",
+   "Database Technology",
+   "Game Design & Programming",
+   "Hybrid Application Development",
+   "Mobile and Game Development Capstone Project"
+  ],
+  "campuses": [
+   "Semarang"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6747",
+  "code": "D6747",
+  "name": "Milkhatussyafa’ah Taufiq, S.T., M.T.",
+  "rank": "Asisten Ahli",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Artificial Intelligence",
+   "Computational Biology",
+   "Computational Physics",
+   "Foundation of Artificial Intelligence",
+   "Human and Computer Interaction",
+   "Web Programming for Business"
+  ],
+  "campuses": [
+   "Malang"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6774",
+  "code": "D6774",
+  "name": "Muhammad Fadlan Hidayat, S.Kom, M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Compilation Techniques",
+   "Data Structures",
+   "EES in Information Technology Industry",
+   "Industrial Experience in Information Technology",
+   "Information Technology Practice in Industrial Experience",
+   "Information Technology Practice in Professional Experience",
+   "Professional Development in Information Technology Industry",
+   "Professional Experience in Information Technology"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6787",
+  "code": "D6787",
+  "name": "Aan Albone, ST, M.T.I.",
+  "rank": "Lektor",
+  "dept": "Data Science",
+  "year": "2025",
+  "courses": [
+   "Big Data Infrastructure and Technology",
+   "Data Management and Organization",
+   "Data Security",
+   "Scientific Computing"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6795",
+  "code": "D6795",
+  "name": "Auliansa Muhammad, S.Komp., M. IT.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Database Technology",
+   "Foundations of Artificial Intelligence",
+   "Object Oriented Analysis & Design",
+   "Object Oriented Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6797",
+  "code": "D6797",
+  "name": "Adi Wibowo P, S.Tr.Kom., M.Kom.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Mobile Application & Technology",
+  "year": "2025",
+  "courses": [
+   "Mobile Programming"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6801",
+  "code": "D6801",
+  "name": "Kelvin, S.Kom, M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm Design and Analysis",
+   "Algorithm and Programming",
+   "Data Structures"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6810",
+  "code": "D6810",
+  "name": "Gregorius Natanael Elwirehardja, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Data Science",
+  "year": "2025",
+  "courses": [
+   "Computational Biology",
+   "Data Management and Organization",
+   "Deep Learning",
+   "Deep Learning and Optimization Methods"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6811",
+  "code": "D6811",
+  "name": "Faisal Asadi, S.T, M.Sc.",
+  "rank": null,
+  "dept": null,
+  "year": "2025",
+  "courses": [
+   "Computational Physics & Biology",
+   "Linear Algebra",
+   "Physics"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6812",
+  "code": "D6812",
+  "name": "Adhe Lingga Dewi, S.Si., M.Si.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Biology",
+   "Calculus",
+   "Computational Biology",
+   "Computational Physics",
+   "Discrete Mathematics",
+   "Physics I",
+   "Physics II"
+  ],
+  "campuses": [
+   "Semarang"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6817",
+  "code": "D6817",
+  "name": "Soni Yora, S.Kom, M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Algorithm Design and Analysis",
+   "Algorithm and Programming",
+   "Cloud Computing",
+   "UI/UX Development",
+   "Web Based Programming"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6823",
+  "code": "D6823",
+  "name": "Alif Tri Handoyo, S.T., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2024",
+  "courses": [
+   "Computer Science Curriculum",
+   "Fundamental Course for Computer Science",
+   "Meet Your Academic Advisor in Computer Science"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6824",
+  "code": "D6824",
+  "name": "Panji Arisaputra, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures",
+   "Foundations of Artificial Intelligence",
+   "Programming for Business",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [
+   "Bekasi"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6825",
+  "code": "D6825",
+  "name": "Samuel Philip, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Compilation Techniques",
+   "Database Technology",
+   "Foundations of Artificial Intelligence",
+   "Human and Computer Interaction",
+   "Introduction to Cloud Infrastructure",
+   "Program Design Methods",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6826",
+  "code": "D6826",
+  "name": "Karen Etania Saputra, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures",
+   "Foundations of Artificial Intelligence"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6828",
+  "code": "D6828",
+  "name": "Pandu Wicaksono, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "Artificial Intelligence"
+  ],
+  "campuses": [
+   "Bekasi"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6829",
+  "code": "D6829",
+  "name": "Afdhal Kurniawan, S.T., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Data Science",
+  "year": "2023",
+  "courses": [
+   "Big Data Infrastructure and Technology",
+   "Data Management and Organization",
+   "Data Structures",
+   "Discrete Mathematics",
+   "Fundamental Course for Data Science",
+   "Machine Learning for Robotics",
+   "Meet Your Academic Advisor in Computer Science",
+   "Meet Your Academic Advisor in Data Science",
+   "Research Methodology in Computer Science",
+   "Scientific Computing"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6830",
+  "code": "D6830",
+  "name": "Galih Dea Pratama, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Game Application  & Technology",
+  "year": "2026",
+  "courses": [
+   "Research Methodology in Computer Science",
+   "User Experience"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6831",
+  "code": "D6831",
+  "name": "Islam Nur Alam, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Data Structures"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6833",
+  "code": "D6833",
+  "name": "Karli Eka Setiawan, S.Si., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Data Science",
+  "year": "2025",
+  "courses": [
+   "Basic Blockchain Programming",
+   "Big Data Infrastructure and Technology",
+   "Data Security",
+   "Deep Learning and Optimization Methods",
+   "Foundations of Artificial Intelligence",
+   "Machine Learning",
+   "Scientific Computing"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6834",
+  "code": "D6834",
+  "name": "Simeon Yuda Prasetyo, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Artificial Intelligence",
+   "Big Data Analytics for Business",
+   "Data Analytics for Business",
+   "Scientific Computing"
+  ],
+  "campuses": [
+   "Malang"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6835",
+  "code": "D6835",
+  "name": "Hanis Amalia Saputri, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Database Technology",
+   "Foundations of Artificial Intelligence",
+   "Human and Computer Interaction",
+   "Program Design Methods"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6836",
+  "code": "D6836",
+  "name": "Riccosan, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Data Structures",
+   "Interaction Design",
+   "Object Oriented Programming",
+   "Software Engineering"
+  ],
+  "campuses": [
+   "Medan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6839",
+  "code": "D6839",
+  "name": "Franz Adeta Junior, S.T., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "Computer Security",
+   "Cyber Security Curriculum",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6840",
+  "code": "D6840",
+  "name": "Renaldy Fredyan, S.Si., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2023",
+  "courses": [
+   "Code Reengineering",
+   "Computer Science Curriculum",
+   "Data Analytics",
+   "Fundamental Course for Computer Science",
+   "Meet Your Academic Advisor in Computer Science",
+   "Operating System",
+   "Physics",
+   "Research Methodology in Computer Science",
+   "Welcome to Computer Science Family"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6841",
+  "code": "D6841",
+  "name": "Ghinaa Zain Nabiilah, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Compilation Techniques",
+   "Database Technology",
+   "EES in Information Technology Industry",
+   "Industrial Experience in Information Technology",
+   "Information Technology Practice in Industrial Experience",
+   "Information Technology Practice in Professional Experience",
+   "Professional Development in Information Technology Industry",
+   "Professional Experience in Information Technology",
+   "Program Design Methods",
+   "Software Engineering"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6845",
+  "code": "D6845",
+  "name": "Nicholaus Hendrik Jeremy, S.Kom., M.Kom.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": "2026",
+  "courses": [
+   "Algorithm Design and Analysis"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6861",
+  "code": "D6861",
+  "name": "Ni Luh Putu Satyaning Pradnya Paramita, S.Si., M.Si., Ph.D",
+  "rank": null,
+  "dept": null,
+  "year": "2024",
+  "courses": [
+   "Bayesian Data Analysis",
+   "Data Science Curriculum",
+   "Decision Making Under Uncertainty",
+   "Fundamental Course for Data Science",
+   "Meet Your Academic Advisor in Data Science",
+   "Network Flow in Transportation and Logistics",
+   "Welcome to Data Science Family"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6882",
+  "code": "D6882",
+  "name": "Hafizh Ash Shiddiqi, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2024",
+  "courses": [
+   "Algorithm and Programming",
+   "Compilation Techniques",
+   "Computer Science Curriculum",
+   "Data Structures",
+   "Fundamental Course for Computer Science",
+   "Meet Your Academic Advisor in Computer Science",
+   "Meet Your Academic Advisor in Computer Science (Master Track)",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D7269",
+  "code": "D7269",
+  "name": "Arya Krisna Putra, S.Kom., M.Kom.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Machine Learning",
+   "Natural Language Processing",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D7270",
+  "code": "D7270",
+  "name": "Fiqri Ramadhan Tambunan, S.Kom., M.Kom.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Computer Vision",
+   "Human and Computer Interaction",
+   "Machine Learning",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D7039",
+  "code": "D7039",
+  "name": "Andien Dwi Novika, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Object Oriented Programming",
+   "Operating System",
+   "Prototyping Blockchain Project",
+   "Research Methodology in Computer Science",
+   "Software Engineering"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D7018",
+  "code": "D7018",
+  "name": "Shania Priccilia, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Human and Computer Interaction",
+   "Object Oriented Programming",
+   "Research Methodology in Computer Science",
+   "Web Programming"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D7080",
+  "code": "D7080",
+  "name": "Nikita Ananda Putri Masaling, S.Kom., M.Kom.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Artificial Intelligence",
+   "Computer Vision",
+   "Human and Computer Interaction",
+   "Machine Learning",
+   "Natural Language Processing",
+   "Research Methodology in Computer Science"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D7040",
+  "code": "D7040",
+  "name": "Ricky Reynardo Siswanto, S.T., M.Kom.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Artificial Intelligence",
+   "Basic Programming for Biotechnology",
+   "Data Structures",
+   "Database Technology",
+   "Deep Learning",
+   "Machine Learning for Robotics",
+   "Research Methodology in Computer Science",
+   "Web Programming"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D7082",
+  "code": "D7082",
+  "name": "Maulin Nasari, S.T., M.Kom.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Computer Science",
+  "year": "2025",
+  "courses": [
+   "Algorithm Design and Analysis",
+   "Compilation Techniques",
+   "Research Methodology in Computer Science",
+   "Software Engineering"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D7047",
+  "code": "D7047",
+  "name": "Rico Halim, S.Kom., M.Kom.",
+  "rank": "Asisten Ahli",
+  "dept": "Artificial Intelligence",
+  "year": "2026",
+  "courses": [
+   "Computer Science Curriculum"
+  ],
+  "campuses": [
+   "Alam Sutera",
+   "Kemanggisan"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6947",
+  "code": "D6947",
+  "name": "Dr. Ir. Selvi Lukman, S.T., M.T., IPM, ASEAN Eng.",
+  "rank": "Lektor",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Artificial Intelligence",
+   "Computational Physics",
+   "Foundations of Artificial Intelligence",
+   "UI/UX Development"
+  ],
+  "campuses": [
+   "Bandung"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D7188",
+  "code": "D7188",
+  "name": "Dr. Fathimah Al Mashumah, S.Si., M.Si.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Algorithm and Programming",
+   "Basic Statistics",
+   "Calculus",
+   "Foundations of Artificial Intelligence",
+   "Linear Algebra"
+  ],
+  "campuses": [
+   "Bandung"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D7187",
+  "code": "D7187",
+  "name": "Cutifa Safitri, B.CS., M. IT., Ph.D.",
+  "rank": "Lektor",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Algorithm Design and Analysis",
+   "Artificial Intelligence",
+   "Bayesian Data Analysis",
+   "Data Structures",
+   "Database Technology"
+  ],
+  "campuses": [
+   "Bandung"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D7055",
+  "code": "D7055",
+  "name": "Livia Janice Widiapradja, S.Si., Ph.D.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Computational Biology",
+   "Computational Physics",
+   "Discrete Mathematics"
+  ],
+  "campuses": [
+   "Bandung"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D7274",
+  "code": "D7274",
+  "name": "Labba Awwabi, S.Tr.Kom., M.Kom.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Introduction to Cloud Computing",
+   "Operating Systems",
+   "Programming for Business"
+  ],
+  "campuses": [
+   "Bandung"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6910",
+  "code": "D6910",
+  "name": "Dio Saputra Kudori, S.Kom., M.Kom.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Agile Software Development",
+   "Foundation of Artificial Intelligence",
+   "Mobile Application Programming",
+   "Object Oriented Programming",
+   "Popular Programming Technology",
+   "Web Programming"
+  ],
+  "campuses": [
+   "Malang"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D7182",
+  "code": "D7182",
+  "name": "Sinjiru Setyawan, S.Kom., M.Kom.",
+  "rank": "Tenaga Pengajar",
+  "dept": "Informatics",
+  "year": "2025",
+  "courses": [
+   "Computer Networks",
+   "Foundation of Artificial Intelligence",
+   "Object Oriented Programming",
+   "Programming for Business"
+  ],
+  "campuses": [
+   "Malang"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "name:canggih gelar setyo adhi s t m cs",
+  "code": null,
+  "name": "Canggih Gelar Setyo Adhi, S.T., M.Cs",
+  "rank": null,
+  "dept": null,
+  "year": null,
+  "courses": [],
+  "campuses": [
+   "Semarang"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "name:muhammad rizki nur majid s t m kom",
+  "code": null,
+  "name": "Muhammad Rizki Nur Majid, S.T., M.Kom.",
+  "rank": null,
+  "dept": null,
+  "year": null,
+  "courses": [],
+  "campuses": [
+   "Semarang"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "name:dr prabowo wahyu sudarno",
+  "code": null,
+  "name": "Dr. Prabowo Wahyu Sudarno",
+  "rank": null,
+  "dept": null,
+  "year": null,
+  "courses": [],
+  "campuses": [
+   "Semarang"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "name:almuzhidul mujhid s si m kom",
+  "code": null,
+  "name": "Almuzhidul Mujhid, S.Si., M.Kom.",
+  "rank": null,
+  "dept": null,
+  "year": null,
+  "courses": [],
+  "campuses": [
+   "Bekasi"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "name:zahra nabila izdihar s t m kom",
+  "code": null,
+  "name": "Zahra Nabila Izdihar, S.T., M.Kom.",
+  "rank": null,
+  "dept": null,
+  "year": null,
+  "courses": [],
+  "campuses": [
+   "Bekasi"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "name:daniel anando wangean s kom m kom",
+  "code": null,
+  "name": "Daniel Anando Wangean, S.Kom., M.Kom",
+  "rank": null,
+  "dept": null,
+  "year": null,
+  "courses": [],
+  "campuses": [
+   "Malang"
+  ],
+  "struktural": null
+ },
+ {
+  "citation_unit": "D6479",
+  "code": "D6479",
+  "name": "Fabian Surya Pramudya, S.T., M.T., Ph.D.",
+  "rank": "Lektor",
+  "dept": "Mathematics",
+  "year": "2025",
+  "courses": [
+   "Computational Biology",
+   "Computational Physics",
+   "Physics"
+  ],
+  "campuses": [],
+  "struktural": "Head of Mathematics & Statistics Department"
+ },
+ {
+  "citation_unit": "D2972",
+  "code": "D2972",
+  "name": "D2972",
+  "rank": null,
+  "dept": null,
+  "year": "2024",
+  "courses": [
+   "Digital Market Research",
+   "Information Systems Project Management",
+   "Social Informatics"
+  ],
+  "campuses": [],
+  "struktural": "Head of Internationalization & Partnership Program"
+ }
+]

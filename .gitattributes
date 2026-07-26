@@ -1,0 +1,5 @@
+# Shell scripts MUST stay LF-terminated: a CRLF entrypoint.sh fails inside the Linux
+# container with "bad interpreter: /bin/sh^M". Force LF regardless of the checkout host's
+# core.autocrlf setting (Windows dev machines default to CRLF conversion).
+*.sh text eol=lf
+backend/entrypoint.sh text eol=lf

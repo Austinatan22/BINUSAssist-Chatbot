@@ -1,0 +1,30 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# build-essential: PyStemmer (bm25s dependency) compiles a C extension at install time.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# CPU-only variant of backend/Dockerfile, for hosts with no GPU (e.g. a small VPS demo
+# deployment). Plain torch/torchvision from PyPI here instead of the cu126 GPU wheels —
+# much smaller download, and EMBEDDING_DEVICE/RERANKER_DEVICE=cpu (see docker-compose.prod.yml)
+# make the rest of the stack run unmodified on CPU (see backend/config.py).
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY backend ./backend
+COPY scripts ./scripts
+
+# Seed the KB on first boot (idempotent -- see scripts/seed_if_empty.py) then start the API.
+COPY backend/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
+EXPOSE 8000
+ENTRYPOINT ["./entrypoint.sh"]

@@ -1,0 +1,31 @@
+{$DOMAIN} {
+	encode gzip
+
+	# FastAPI routes (see backend/main.py, backend/admin/routes.py) — everything else
+	# falls through to the frontend's static SPA build below.
+	handle /health {
+		reverse_proxy backend:8000
+	}
+	handle /config/* {
+		reverse_proxy backend:8000
+	}
+	handle /chat {
+		reverse_proxy backend:8000
+	}
+	handle /feedback {
+		reverse_proxy backend:8000
+	}
+	handle /documents/* {
+		reverse_proxy backend:8000
+	}
+	# Note: the frontend SPA also has a page at the exact path /admin (no trailing slash) —
+	# it doesn't collide with this, since every real backend admin route has a segment
+	# after /admin/ (e.g. /admin/documents), and Caddy's /admin/* glob requires that slash.
+	handle /admin/* {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		reverse_proxy frontend:80
+	}
+}

@@ -1,0 +1,15 @@
+.venv
+__pycache__
+*.pyc
+.git
+node_modules
+frontend/node_modules
+frontend/dist
+backend/vectorstore
+backend/documents/*
+!backend/documents/.gitkeep
+backend/feedback.jsonl
+backend/__pycache__
+*.log
+.env
+*.code-workspace
