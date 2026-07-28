@@ -966,9 +966,37 @@ async def rewrite_query(query: str, n: int = 3) -> list[str]:
             for line in response.message.content.splitlines()
             if line.strip()
         ]
-        return [line for line in lines if line][:n]
+        lines = [line for line in lines if line][:n]
     except Exception:
-        return []
+        lines = []
+
+    # Cross-lingual rescue: the catalogs are English, and the reranker scores a pure-
+    # Indonesian question near-zero against them even when the content matches (measured:
+    # "prospek karir Ilmu Komputer" 0.016 vs "career prospects for Computer Science" 0.989 on
+    # the SAME doc -- the exact reason "Ilmu Komputer" questions fall back while the English
+    # "Computer Science" phrasing answers). rewrite_system_prompt asks for an English variant
+    # but the model unreliably includes one, so GUARANTEE it here with a dedicated translation.
+    # Prepended (tried first) since it's the strongest anchor into the English document.
+    if detect_language(query) == "id":
+        english = await _translate_query_to_english(query)
+        if english and english.lower() not in {line.lower() for line in lines}:
+            lines.insert(0, english)
+    return lines
+
+
+async def _translate_query_to_english(query: str) -> str:
+    """A focused single-call translation of an Indonesian question to English, used to build
+    a reliable English retrieval query for the (English) program catalogs -- see rewrite_query
+    and TRANSLATE_TO_ENGLISH_SYSTEM_PROMPT. Returns "" on any failure (the caller just skips
+    the English anchor). Retrieval-only: generation still sees the user's original wording."""
+    try:
+        response = await Settings.llm.achat([
+            ChatMessage(role=MessageRole.SYSTEM, content=prompts.TRANSLATE_TO_ENGLISH_SYSTEM_PROMPT),
+            ChatMessage(role=MessageRole.USER, content=query),
+        ])
+        return (response.message.content or "").strip().strip('"\'')
+    except Exception:
+        return ""
 
 
 # Follow-up suggestions (IMPROVEMENTS.md #9.3). Templated, not model-generated: a

@@ -228,6 +228,21 @@ def unmatched_program_user_prompt(options: str, query: str) -> str:
 # --- Multi-query expansion (low-confidence retry) ----------------------------------
 
 
+# The program-guide documents are written in English, and the reranker scores a pure-
+# Indonesian question near-zero against them even when the content matches perfectly
+# (measured: "prospek karir Ilmu Komputer" -> 0.016 vs the English "career prospects for
+# Computer Science" -> 0.989 against the SAME document). rewrite_system_prompt asks for an
+# English alternative, but the small model doesn't reliably include one when juggling several
+# paraphrases -- so this dedicated, single-purpose translation is used to GUARANTEE an English
+# retrieval query exists (see generation._translate_query_to_english). Translation alone is a
+# task the model does reliably; it's the multi-output juggling it drops.
+TRANSLATE_TO_ENGLISH_SYSTEM_PROMPT = (
+    "Translate the user's question about a university program into English. Output ONLY the "
+    "English translation -- no quotes, no explanation, no preamble. If it is already in "
+    "English, output it unchanged."
+)
+
+
 def rewrite_system_prompt(n: int) -> str:
     return (
         "You expand search queries for a university program-guide knowledge base "

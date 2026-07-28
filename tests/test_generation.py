@@ -17,6 +17,7 @@ from backend.config import settings
 from backend.rag.prompts import language_reminder
 from backend.config import get_fallback_message
 from backend.rag.generation import (
+    rewrite_query,
     stream_contextual_fallback,
     _SENTINEL_PROBE_CHARS,
     _SENTINEL_RE,
@@ -1225,6 +1226,65 @@ class TestFallbackMessageCopy:
         assert get_fallback_message("en") != get_fallback_message("id")
         assert get_fallback_message("en").strip()
         assert get_fallback_message("id").strip()
+
+
+class TestRewriteQueryCrossLingual:
+    """rewrite_query is the below-gate retry. The catalogs are English and the reranker scores
+    a pure-Indonesian query near-zero against them, so for an Indonesian question rewrite_query
+    must GUARANTEE an English translation is among the retry queries -- the model doesn't
+    reliably include one on its own (found live: 'prospek karir Ilmu Komputer' fell back because
+    every rewrite stayed Indonesian). Settings.llm is mocked; no GPU/Groq."""
+
+    @staticmethod
+    def _mock_two_calls(monkeypatch, rewrite_lines, translation):
+        # rewrite_query calls the LLM twice for Indonesian: the paraphrase call, then the
+        # dedicated translation call. Route by which system prompt was sent.
+        from backend.rag import prompts
+
+        async def achat(messages, **kw):
+            sysmsg = messages[0].content
+            if sysmsg == prompts.TRANSLATE_TO_ENGLISH_SYSTEM_PROMPT:
+                content = translation
+            else:
+                content = "\n".join(rewrite_lines)
+            return SimpleNamespace(message=SimpleNamespace(content=content))
+
+        monkeypatch.setattr(generation.Settings, "_llm", SimpleNamespace(achat=achat))
+
+    def test_indonesian_query_gets_an_english_translation_prepended(self, monkeypatch):
+        self._mock_two_calls(
+            monkeypatch,
+            rewrite_lines=["Prospek karir lulusan Ilmu Komputer", "Karir Ilmu Komputer"],
+            translation="career prospects for Computer Science graduates",
+        )
+        out = asyncio.run(rewrite_query("Bagaimana prospek karir bagi lulusan Ilmu Komputer?"))
+        assert out[0] == "career prospects for Computer Science graduates"  # English anchor first
+        assert "Prospek karir lulusan Ilmu Komputer" in out
+
+    def test_english_query_gets_no_translation_call(self, monkeypatch):
+        from backend.rag import prompts
+        translate_called = []
+
+        async def achat(messages, **kw):
+            if messages[0].content == prompts.TRANSLATE_TO_ENGLISH_SYSTEM_PROMPT:
+                translate_called.append(True)
+            return SimpleNamespace(message=SimpleNamespace(
+                content="Computer Science career outcomes\nCS graduate jobs"))
+
+        monkeypatch.setattr(generation.Settings, "_llm", SimpleNamespace(achat=achat))
+        out = asyncio.run(rewrite_query("What are the career prospects for Computer Science?"))
+        assert translate_called == []  # no translation for an already-English query
+        assert out  # normal paraphrases returned
+
+    def test_duplicate_translation_is_not_added_twice(self, monkeypatch):
+        # If a rewrite paraphrase already equals the translation, don't duplicate it.
+        self._mock_two_calls(
+            monkeypatch,
+            rewrite_lines=["career prospects for Computer Science graduates"],
+            translation="career prospects for Computer Science graduates",
+        )
+        out = asyncio.run(rewrite_query("Bagaimana prospek karir Ilmu Komputer?"))
+        assert out.count("career prospects for Computer Science graduates") == 1
 
 
 class TestContextualFallback:
