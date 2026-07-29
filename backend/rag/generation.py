@@ -1508,6 +1508,37 @@ async def _chain_deltas(prefix: list[str], rest: AsyncGenerator[str, None]) -> A
         yield delta
 
 
+# The NO_ANSWER sentinel as it may appear AFTER the model has already begun answering and
+# then hedges -- e.g. "...could follow a career as: [1]. NO_ANSWER" (observed live on
+# gpt-4o-mini). _SENTINEL_RE only anchors the START of the reply (-> whole-answer
+# fallback); this catches a stray occurrence anywhere so the raw token is never shown.
+# The partial answer already streamed can't be retracted, but excising the sentinel is
+# strictly better than leaking it. Tolerant of the same wrapping/punctuation _SENTINEL_RE is.
+_SENTINEL_ANYWHERE_RE = re.compile(r'\s*["\'`*_]*\bNO_ANSWER\b["\'`*_.!?]*', re.IGNORECASE)
+# Trailing chars held back before emitting, so a sentinel forming at the buffer tail (or
+# split across deltas) is caught intact rather than half-streamed. Longer than the sentinel
+# plus its wrapping; the resulting emit lag is a couple dozen characters, imperceptible.
+_SENTINEL_TAIL_HOLD = 24
+
+
+async def _strip_trailing_sentinel(deltas: AsyncGenerator[str, None]) -> AsyncGenerator[str, None]:
+    """Removes any NO_ANSWER sentinel (see _SENTINEL_ANYWHERE_RE) from a delta stream,
+    wherever it lands. Holds back the last _SENTINEL_TAIL_HOLD chars so an occurrence that
+    is still arriving isn't emitted before it can be matched and dropped; everything before
+    that window streams through unchanged."""
+    buffer = ""
+    async for delta in deltas:
+        buffer = _SENTINEL_ANYWHERE_RE.sub("", buffer + delta)
+        if len(buffer) > _SENTINEL_TAIL_HOLD:
+            cut = len(buffer) - _SENTINEL_TAIL_HOLD
+            chunk, buffer = buffer[:cut], buffer[cut:]
+            if chunk:
+                yield chunk
+    buffer = _SENTINEL_ANYWHERE_RE.sub("", buffer).rstrip()
+    if buffer:
+        yield buffer
+
+
 def _fallback_events(language: str) -> list[str]:
     """The one place a fallback is emitted, so every path that reaches it produces the
     identical user experience: the deterministic copy, the structured contacts for the
@@ -1829,7 +1860,9 @@ async def stream_answer(
                 yield event
             return
 
-        async for content in _strip_leading_preamble(_chain_deltas(probe_parts, raw)):
+        async for content in _strip_trailing_sentinel(
+            _strip_leading_preamble(_chain_deltas(probe_parts, raw))
+        ):
             emitted_any = True
             answer_parts.append(content)
             yield _sse_event({"type": "token", "content": content})

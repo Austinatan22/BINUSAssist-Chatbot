@@ -36,6 +36,7 @@ from backend.rag.generation import (
     _recent_history,
     _repair_condensed_query,
     _strip_leading_preamble,
+    _strip_trailing_sentinel,
     condense_question,
     detect_language,
     detect_unresolved_campus_mention,
@@ -343,6 +344,39 @@ class TestCondenseQuestionGuard:
             condense_question(history, "prospek karir Computer Science", ["Computer Science", "Data Science"])
         )
         assert result == "prospek karir Computer Science"
+
+
+class TestStripTrailingSentinel:
+    """Excising a NO_ANSWER sentinel the model appends AFTER starting to answer (observed
+    on gpt-4o-mini) so the raw token never reaches the user -- _SENTINEL_RE only catches a
+    start-anchored sentinel. Streaming transformer; no LLM."""
+
+    def _run(self, *chunks):
+        return "".join(asyncio.run(_collect(_strip_trailing_sentinel(_deltas(*chunks)))))
+
+    def test_trailing_sentinel_is_removed(self):
+        out = self._run("Careers include Software Engineer [1]. ", "NO_ANSWER")
+        assert "NO_ANSWER" not in out
+        assert out == "Careers include Software Engineer [1]."
+
+    def test_sentinel_split_across_deltas_is_removed(self):
+        out = self._run("answer text ", "NO_", "ANSW", "ER")
+        assert "NO_ANSWER" not in out and "NO_" not in out
+        assert out == "answer text"
+
+    def test_wrapped_sentinel_is_removed(self):
+        assert self._run("done here ", '**NO_ANSWER**') == "done here"
+        assert self._run("done here. ", '"NO_ANSWER."') == "done here."
+
+    def test_normal_answer_passes_through_unchanged(self):
+        text = "The Computer Science program is a 4-year degree [1] with strong industry ties [2]."
+        # chunked arbitrarily -- output must be byte-identical
+        assert self._run(*[text[i:i+7] for i in range(0, len(text), 7)]) == text
+
+    def test_no_false_strip_on_similar_words(self):
+        # "ANSWER"/"NO" alone must not be touched -- only the exact NO_ANSWER token.
+        text = "The ANSWER to your question is NO, there is no such track."
+        assert self._run(text) == text
 
 
 class TestRepairCondensedQuery:
