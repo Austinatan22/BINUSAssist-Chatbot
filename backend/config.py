@@ -64,6 +64,38 @@ class Settings(BaseSettings):
     # observed upside to going further and it costs nothing to stay conservative.
     llm_frequency_penalty: float = 0.3
 
+    # Generation provider (see backend/rag/models.py). Only the generation model differs --
+    # the embedding/retrieval/rerank stack is identical for all three:
+    #   "openai" (default) -- OpenAI's own models (gpt-4o-mini); chosen as the primary
+    #            after a 2026-07-29 head-to-head: best out-of-the-box fallback accuracy
+    #            (incl. Indonesian), reliable, cheap (~$3/mo at ~5k req).
+    #   "groq"   -- the pinned open Llama model via Groq's OpenAI-compatible endpoint.
+    #            RETAINED but dormant: fastest + cheapest per token, so kept fully working
+    #            for future reactivation (set LLM_PROVIDER=groq); parked in mid-2026 because
+    #            the account was 403-blocked and its pro tier was unavailable.
+    #   "gemini" -- Google's Gemini Flash (see gemini_model). Also selectable.
+    llm_provider: str = "openai"
+    openai_api_key: str = ""
+    # OpenAI generation model when llm_provider="openai". gpt-4o-mini is the cheap,
+    # well-established mini tier; gpt-4.1-mini / a current gpt-5-mini are stronger if
+    # available on the account -- verify with the models endpoint before pinning.
+    openai_model: str = "gpt-4o-mini"
+    gemini_api_key: str = ""
+    # Gemini generation model when llm_provider="gemini". flash-lite-latest chosen
+    # empirically (2026-07-29) as the fast, available, clean-output option on a new
+    # free-tier key: thinking is OFF by default (so no token-starvation, ~1.7s responses),
+    # and it's a big step up from the 8B model. The alternatives all had blockers that day:
+    # gemini-2.5-flash is retired for new keys (404); gemini-3.5-flash accepts thinking off
+    # but was 503-congested; gemini-3.6-flash / flash-latest keep thinking ON and (under the
+    # 1024 token cap) let it eat the answer -> garbled fragments. Google rotates ids and
+    # capacity, so re-verify with models.list and a timed call before pinning a full-flash tier.
+    gemini_model: str = "gemini-flash-lite-latest"
+    # Gemini "thinking" budget. None = don't send a thinking_config at all -- correct for
+    # flash-lite (thinking already off; it 400s if the field is sent) and any model that
+    # rejects the field. Set to 0 to explicitly DISABLE thinking on a full-flash tier that
+    # supports it (e.g. gemini-3.5-flash), which is essential there for chatbot latency.
+    gemini_thinking_budget: int | None = None
+
     documents_dir: Path = BASE_DIR / "backend" / "documents"
     avatar_dir: Path = BASE_DIR / "backend" / "avatar"
     users_path: Path = BASE_DIR / "backend" / "users.json"
@@ -194,6 +226,20 @@ def validate_startup_config() -> None:
     init_models() and legitimately never invoke the LLM, so a blanket pydantic-level
     validator on Settings would break those for no reason.
     """
+    if settings.llm_provider == "gemini":
+        if not settings.gemini_api_key.strip():
+            raise RuntimeError(
+                "LLM_PROVIDER=gemini but GEMINI_API_KEY is not set. Add it to .env "
+                "(GEMINI_API_KEY=...) or switch LLM_PROVIDER back to groq."
+            )
+        return
+    if settings.llm_provider == "openai":
+        if not settings.openai_api_key.strip():
+            raise RuntimeError(
+                "LLM_PROVIDER=openai but OPENAI_API_KEY is not set. Add it to .env "
+                "(OPENAI_API_KEY=sk-...) or switch LLM_PROVIDER back to groq."
+            )
+        return
     if not settings.groq_api_key.strip():
         raise RuntimeError(
             "GROQ_API_KEY is not set. Add it to .env (GROQ_API_KEY=gsk_...) or set it as "

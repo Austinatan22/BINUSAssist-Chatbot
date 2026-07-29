@@ -77,6 +77,7 @@ lingua-language-detector==2.2.0
 llama-index-core==0.14.22
 llama-index-embeddings-huggingface==0.7.0
 llama-index-instrumentation==0.5.0
+llama-index-llms-google-genai==0.9.6
 llama-index-llms-groq==0.5.0
 llama-index-llms-openai==0.6.26
 llama-index-llms-openai-like==0.5.3
