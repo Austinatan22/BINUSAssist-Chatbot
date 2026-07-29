@@ -1290,21 +1290,31 @@ def build_messages(
     is_comparison: bool = False,
 ) -> tuple[list[ChatMessage], str]:
     source_ids = _assign_source_ids(nodes)
-    # One block per citation id, using each citation's larger parent chunk (R-02) for
-    # fuller context -- also dedupes multiple retrieved child chunks from the same source.
-    seen_ids: set[int] = set()
-    ordered: list[tuple[int, NodeWithScore]] = []
+    # One citation id per source (R-02: cite via the larger parent chunk for fuller
+    # context), but KEEP EVERY DISTINCT parent chunk retrieved for that id. Multiple
+    # relevant sections of the same document -- e.g. a careers-section intro AND the career
+    # list itself, both on one page of Computer_Science_2026.pdf -- share a _source_key, and
+    # collapsing them to just the top-ranked chunk's parent silently dropped the rest of the
+    # answer's content (the model then faithfully declined, having only half the section).
+    ordered_sids: list[int] = []
+    texts_by_sid: dict[int, list[str]] = {}
+    first_node_by_sid: dict[int, NodeWithScore] = {}
     for node in nodes:
         sid = source_ids[_source_key(node)]
-        if sid in seen_ids:
-            continue
-        seen_ids.add(sid)
-        ordered.append((sid, node))
-    labels = _disambiguated_labels({sid: node.metadata.get("source_file") or "" for sid, node in ordered})
+        text = node.metadata.get("parent_text") or node.get_content()
+        if sid not in texts_by_sid:
+            texts_by_sid[sid] = []
+            first_node_by_sid[sid] = node
+            ordered_sids.append(sid)
+        if text not in texts_by_sid[sid]:  # distinct parents only (same parent retrieved twice -> once)
+            texts_by_sid[sid].append(text)
+    labels = _disambiguated_labels(
+        {sid: first_node_by_sid[sid].metadata.get("source_file") or "" for sid in ordered_sids}
+    )
 
     context_blocks = []
-    for sid, node in ordered:
-        text = node.metadata.get("parent_text") or node.get_content()
+    for sid in ordered_sids:
+        text = "\n\n".join(texts_by_sid[sid])
         # <context-block> tags are the structural boundary ANSWER_SYSTEM_PROMPT rule 9
         # points to (IMPROVEMENTS.md #8.2) -- untrusted scraped/uploaded text stays
         # visibly fenced off from the surrounding prompt scaffolding, rather than the
@@ -1497,6 +1507,14 @@ _SENTINEL_RE = re.compile(r'^["\'`*_\s]*NO_ANSWER\b', re.IGNORECASE)
 # Enough of the reply to buffer before deciding whether it's the sentinel. Comfortably
 # longer than `"NO_ANSWER"` plus wrapping, short enough that the delay is imperceptible.
 _SENTINEL_PROBE_CHARS = 24
+# Peek this far (or until a sentinel appears) before committing to stream. Catches the
+# model starting to answer and then bailing with "...NO_ANSWER" -- if that happens while
+# the real (sentinel-stripped) content so far is still only a stub (<= _SENTINEL_STUB_MAX_
+# CHARS), the whole turn becomes a clean fallback instead of shipping the dangling
+# half-answer. A genuine substantial answer that reaches the cap without a sentinel streams
+# normally (first token delayed by only the extra buffered chars, ~0.3-0.5s).
+_SENTINEL_DECISION_CHARS = 200
+_SENTINEL_STUB_MAX_CHARS = 160
 
 
 async def _chain_deltas(prefix: list[str], rest: AsyncGenerator[str, None]) -> AsyncGenerator[str, None]:
@@ -1519,6 +1537,18 @@ _SENTINEL_ANYWHERE_RE = re.compile(r'\s*["\'`*_]*\bNO_ANSWER\b["\'`*_.!?]*', re.
 # split across deltas) is caught intact rather than half-streamed. Longer than the sentinel
 # plus its wrapping; the resulting emit lag is a couple dozen characters, imperceptible.
 _SENTINEL_TAIL_HOLD = 24
+
+
+def _is_bailed_stub(buffered: str) -> bool:
+    """True when a peeked prefix contains the NO_ANSWER sentinel AND the real content around
+    it is at most a stub (<= _SENTINEL_STUB_MAX_CHARS). Covers both a start-anchored sentinel
+    (nothing before it) and the model answering a stub then bailing with a trailing sentinel
+    -- either way the model is signalling it can't answer, so the turn should fall back
+    cleanly rather than ship the fragment. A substantial answer that merely picked up a stray
+    sentinel returns False (it streams, sentinel excised downstream)."""
+    if not _SENTINEL_ANYWHERE_RE.search(buffered):
+        return False
+    return len(_SENTINEL_ANYWHERE_RE.sub("", buffered).strip()) <= _SENTINEL_STUB_MAX_CHARS
 
 
 async def _strip_trailing_sentinel(deltas: AsyncGenerator[str, None]) -> AsyncGenerator[str, None]:
@@ -1845,17 +1875,27 @@ async def stream_answer(
 
         raw = _raw_deltas()
         # Peek before emitting anything: once a token reaches the client it can't be taken
-        # back, and the sentinel must never be shown to a user.
+        # back, and the sentinel must never be shown to a user. Buffer up to
+        # _SENTINEL_DECISION_CHARS (or until a sentinel appears) so this catches BOTH a
+        # start-anchored NO_ANSWER and the model answering a stub then bailing with a
+        # trailing NO_ANSWER (observed on gpt-4o-mini when the retrieved section names a
+        # list but doesn't actually contain it -- a faithful "I can't complete this").
         probe_parts: list[str] = []
         probe = ""
+        sentinel_hit = False
         async for delta in raw:
             probe_parts.append(delta)
             probe += delta
-            if len(probe.strip()) >= _SENTINEL_PROBE_CHARS:
+            if _SENTINEL_ANYWHERE_RE.search(probe):
+                sentinel_hit = True
                 break
-        if _SENTINEL_RE.match(probe.strip()):
-            # The model saw context but it didn't actually answer the question -- same
-            # topic-aware fallback as the empty-retrieval case above.
+            if len(probe.strip()) >= _SENTINEL_DECISION_CHARS:
+                break
+        if sentinel_hit and _is_bailed_stub(probe):
+            # Only a stub (or nothing) before the sentinel -> the model signalled it can't
+            # answer. Same topic-aware fallback as the empty-retrieval case above. (A
+            # substantial answer that merely appended a stray sentinel falls through and
+            # streams, with the sentinel excised downstream by _strip_trailing_sentinel.)
             async for event in stream_contextual_fallback(query):
                 yield event
             return

@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 import backend.rag.generation as generation
+from llama_index.core.schema import NodeWithScore, TextNode
 from backend.config import settings
 from backend.rag.prompts import language_reminder
 from backend.config import get_fallback_message
@@ -35,8 +36,10 @@ from backend.rag.generation import (
     _names_out_of_catalog_variant,
     _recent_history,
     _repair_condensed_query,
+    _is_bailed_stub,
     _strip_leading_preamble,
     _strip_trailing_sentinel,
+    build_messages,
     condense_question,
     detect_language,
     detect_unresolved_campus_mention,
@@ -377,6 +380,60 @@ class TestStripTrailingSentinel:
         # "ANSWER"/"NO" alone must not be touched -- only the exact NO_ANSWER token.
         text = "The ANSWER to your question is NO, there is no such track."
         assert self._run(text) == text
+
+
+class TestIsBailedStub:
+    """The peek-time decision to route a NO_ANSWER-signalled non-answer to a clean fallback
+    instead of shipping the fragment -- covers both a start-anchored sentinel and the model
+    answering a stub then bailing with a trailing one (observed on gpt-4o-mini)."""
+
+    def test_start_anchored_sentinel_is_a_stub(self):
+        assert _is_bailed_stub("NO_ANSWER") is True
+        assert _is_bailed_stub('  "NO_ANSWER".') is True
+
+    def test_short_partial_then_sentinel_is_a_stub(self):
+        # The exact live shape: a lead-in that promises a list, then the model bails.
+        assert _is_bailed_stub(
+            "- After finishing the program, graduates could follow a career as: [1]. NO_ANSWER"
+        ) is True
+
+    def test_substantial_answer_with_stray_sentinel_is_not_a_stub(self):
+        real = ("The Computer Science program is a 4-year degree [1]. Graduates gain strong "
+                "foundations in algorithms, systems, and software engineering, plus industry "
+                "exposure through internships and capstone projects [2]. NO_ANSWER")
+        assert _is_bailed_stub(real) is False  # >160 chars of real content -> keep & stream
+
+    def test_no_sentinel_is_never_a_stub(self):
+        assert _is_bailed_stub("A perfectly ordinary short answer [1].") is False
+
+
+class TestBuildMessagesMultiParent:
+    """build_messages keeps EVERY distinct parent chunk retrieved for one citation id, so an
+    answer spanning two sections of the same document isn't truncated to the top chunk's
+    parent (which previously dropped, e.g., a careers list that lived in a second chunk)."""
+
+    @staticmethod
+    def _node(text, parent, page):
+        node = TextNode(text=text, metadata={
+            "source_file": "Computer_Science_2026.pdf", "page_number": page, "parent_text": parent,
+        })
+        return NodeWithScore(node=node, score=0.9)
+
+    def test_distinct_parents_same_source_key_are_both_kept(self):
+        # Same source_file AND page -> same _source_key (one citation id), but different
+        # parent chunks -> both parent texts must appear in the single citation block.
+        n1 = self._node("intro child", "SECTION A: the program overview", page=1)
+        n2 = self._node("careers child", "SECTION B: careers include Software Engineer, Data Scientist", page=1)
+        _, ctx = build_messages("q", [n1, n2])
+        assert "SECTION A: the program overview" in ctx
+        assert "Software Engineer, Data Scientist" in ctx
+        assert ctx.count("[1]") == 1  # one citation id, both parents merged under it
+
+    def test_same_parent_retrieved_twice_is_not_duplicated(self):
+        n1 = self._node("child a", "THE ONE PARENT", page=1)
+        n2 = self._node("child b", "THE ONE PARENT", page=1)
+        _, ctx = build_messages("q", [n1, n2])
+        assert ctx.count("THE ONE PARENT") == 1
 
 
 class TestRepairCondensedQuery:
