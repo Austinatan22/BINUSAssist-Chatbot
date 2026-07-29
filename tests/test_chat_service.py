@@ -195,14 +195,14 @@ class TestUnresolvedMentionDetection:
         return plan
 
     def test_unresolved_campus_token_is_stashed_when_retrieval_empty(self, monkeypatch):
-        plan = self._run_open_branch(monkeypatch, "kampus xyzville ada apa", False, [])
-        assert plan.unresolved_campus_mention == "xyzville"
+        plan = self._run_open_branch(monkeypatch, "kampus Xyzville ada apa", False, [])
+        assert plan.unresolved_campus_mention == "Xyzville"
         assert plan.unresolved_program_mention is None
 
     def test_unresolved_program_token_is_stashed_when_no_campus(self, monkeypatch):
-        plan = self._run_open_branch(monkeypatch, "jurusan xyzology apa", False, [])
+        plan = self._run_open_branch(monkeypatch, "jurusan Xyzology apa", False, [])
         assert plan.unresolved_campus_mention is None
-        assert plan.unresolved_program_mention == "xyzology"
+        assert plan.unresolved_program_mention == "Xyzology"
 
     def test_genuine_out_of_catalog_program_is_left_on_the_plain_fallback_path(self, monkeypatch):
         # "Kedokteran" is flagged out-of-catalog by the LLM (named_unmatched) AND resembles

@@ -154,7 +154,9 @@ async def condense_question(
                 ),
             ]
         )
-        return response.message.content.strip() or question
+        condensed = response.message.content.strip() or question
+        return _repair_condensed_query(condensed=condensed, question=question,
+                                       history=history, program_names=program_names or [])
     except Exception:
         return question
 
@@ -466,6 +468,100 @@ def _last_program_in_history(history: list[dict], program_names: list[str]) -> s
     return None
 
 
+def _topic_program_from_history(history: list[dict], program_names: list[str]) -> str | None:
+    """The conversation's subject program for scoping a referential follow-up -- the most
+    recent program the USER named across recent history (newest first), falling back to any
+    recent turn if no user turn named one. User turns are preferred over assistant turns
+    because an assistant ANSWER routinely mentions other programs in passing (e.g. a
+    comparison aside), and that passing mention must not be mistaken for the subject the
+    user is actually following up on. Returns None when no recent turn names a known program.
+    """
+    if not program_names:
+        return None
+    recent = _recent_history(history)
+    for role in ("user", None):  # user turns first, then any turn
+        for turn in reversed(recent):
+            if role is not None and turn.get("role") != role:
+                continue
+            matches = _literal_program_matches(turn.get("content", ""), program_names)
+            if matches:
+                return max(matches, key=len)
+    return None
+
+
+# A follow-up that plainly cannot stand on its own -- a bare qualifier ("Semester 5?"), a
+# continuation marker ("what about ...", "kalau ...", "terus ..."), or a one/two-word
+# fragment -- so its subject can only come from the conversation. Used to gate the
+# entity-LOSS repair below: only such a follow-up may have its subject program re-grafted
+# from history, so a genuinely self-contained question (which might legitimately introduce
+# a new, unrelated subject) is never force-scoped to the previous topic.
+_REFERENTIAL_FOLLOWUP_RE = re.compile(
+    r"^\s*(?:"
+    r"(?:semester|semseter|smt|sem|tahun|year|level|tingkat|kelas)\s*\d"  # "Semester 5?"
+    r"|(?:what|how)\s+about\b|and\s+(?:the|its|for|what)\b"
+    r"|(?:tell\s+me\s+)?more\b|lebih\s+(?:lanjut|detail|jauh)\b"
+    r"|bagaimana\s+(?:dengan|kalau|kalo)\b|gimana\s+(?:dengan|kalau|kalo)\b"
+    r"|kalau\b|kalo\b|terus\b|lalu\b|kemudian\b|selanjutnya\b|berikutnya\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _is_referential_followup(question: str) -> bool:
+    if _REFERENTIAL_FOLLOWUP_RE.search(question):
+        return True
+    return len(question.split()) <= 2
+
+
+def _repair_condensed_query(
+    question: str, condensed: str, history: list[dict], program_names: list[str]
+) -> str:
+    """Deterministic backstop on the LLM's condense output, for the two ways it corrupts a
+    follow-up's SUBJECT on this model despite the prompt forbidding it (same trust-code-not-
+    -compliance discipline as the pre-rewrite guards in condense_question):
+
+    1. Substitution -- the rewrite names a program that appears NOWHERE in the conversation
+       (neither the follow-up nor any recent turn). A faithful rewrite can only ever reuse a
+       program already on the table, so a program from outside that set is invented and must
+       be dropped. Precise by construction: a legitimate pronoun-resolution rewrite reuses an
+       in-conversation program and is left untouched. (Confirmed class: the model swapping in
+       a different, unrelated program/campus -- see condense_question's docstring.)
+
+    2. Loss/garble -- a referential follow-up that names no program itself (so it depends
+       entirely on history) condenses to a query that resolves to NO program, even though the
+       conversation had a clear subject. Confirmed live (query_log.jsonl): "Semester 5?" after
+       a Computer Science thread condensed to "...CS ALSUT Global Class pada semester 5", a
+       garbled compound that matched no catalog program and fell back.
+
+    On either, re-scope deterministically to the conversation's subject (_topic_program_from_
+    history) by appending it to the user's ORIGINAL wording -- retrieval-only, so the user
+    still sees their own words at generation. Falls back to the bare original question when no
+    subject is resolvable (safe: an underscoped follow-up degrades to a normal decline, never
+    a confidently wrong-subject answer).
+    """
+    if not program_names:
+        return condensed
+    allowed = set(_literal_program_matches(question, program_names))
+    for turn in _recent_history(history):
+        allowed.update(_literal_program_matches(turn.get("content", ""), program_names))
+    condensed_progs = set(_literal_program_matches(condensed, program_names))
+
+    substituted = bool(condensed_progs) and not condensed_progs.issubset(allowed)
+    lost = (
+        not condensed_progs
+        and not _literal_program_matches(question, program_names)
+        and bool(allowed)
+        and _is_referential_followup(question)
+    )
+    if not (substituted or lost):
+        return condensed
+
+    topic = _topic_program_from_history(history, program_names)
+    if not topic:
+        return question
+    return f"{question} {topic}"
+
+
 def normalize_campus_aliases(query: str) -> str:
     """Replaces a known informal campus alias with the campus's own name, for RETRIEVAL
     purposes only (mirrors strip_retrieval_filler's scoping -- this never touches what's
@@ -627,6 +723,34 @@ _PROGRAM_MENTION_RE = re.compile(
 )
 
 
+def _looks_like_unresolved_name(token: str, known_names: Iterable[str]) -> bool:
+    """Whether an anchor's leftover token actually looks like a (mis-typed or unknown)
+    campus/program NAME rather than an ordinary word -- true only if it is proper-noun-
+    style capitalised, or a close typo of a real known name.
+
+    This is the guard that keeps the "kampus/campus/jurusan/program <token>" anchors from
+    firing on ENGLISH word order, where the name precedes the keyword and the trailing
+    word is a common noun: "campus facilities", "campus map", "campus wheelchair
+    accessible", "program duration", "program accreditation", "major requirements". None
+    of those name a garbled campus/program, so they must fall through to the normal
+    contextual fallback -- not a spurious "which campus/program did you mean?".
+
+    A real mis-typed name still fires: a proper-noun capital ("Alsut", "Blahblah") passes
+    directly, and a lowercase typo of a real name ("kemangisan") is caught by
+    rank_clarification_suggestions' case-insensitive close match. Pure lowercase gibberish
+    with no resemblance to any real name ("xyzville") deliberately does NOT fire -- the
+    contextual fallback serves it better than a dump of every known name.
+    """
+    if token[:1].isupper():
+        return True
+    # Lowercase leftover: only name-like if it's a CLOSE typo of a real name. A stricter
+    # cutoff than the suggestion-list default (0.5) is used deliberately -- measured, an
+    # ordinary English word coincidentally half-matches a name at ~0.5 ("map"->"Medan",
+    # "duration"->"Data Science"), while a genuine lowercase typo of a name lands ~0.9+
+    # ("kemangisan"->"Kemanggisan"); 0.7 sits in the clear gap between the two.
+    return bool(rank_clarification_suggestions(token, known_names, cutoff=0.7))
+
+
 def detect_unresolved_campus_mention(query: str, campus_names: set[str]) -> str | None:
     """The word after "kampus"/"campus" when it names a campus we can't resolve -- i.e.
     it's neither a known campus (canonical name or alias, via _names_known_campus), nor
@@ -655,6 +779,8 @@ def detect_unresolved_campus_mention(query: str, campus_names: set[str]) -> str 
         return None
     if token_lower in {name.split()[0].lower() for name in campus_names}:
         return None
+    if not _looks_like_unresolved_name(token, campus_names):
+        return None
     return token
 
 
@@ -680,6 +806,8 @@ def detect_unresolved_program_mention(query: str, program_names: list[str]) -> s
     if not re.search(r"[a-zA-Z]", token):
         return None
     if token.lower() in _PROGRAM_MENTION_STOPWORDS:
+        return None
+    if not _looks_like_unresolved_name(token, program_names):
         return None
     return token
 

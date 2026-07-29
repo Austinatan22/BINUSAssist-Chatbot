@@ -34,6 +34,7 @@ from backend.rag.generation import (
     _names_known_campus,
     _names_out_of_catalog_variant,
     _recent_history,
+    _repair_condensed_query,
     _strip_leading_preamble,
     condense_question,
     detect_language,
@@ -344,6 +345,76 @@ class TestCondenseQuestionGuard:
         assert result == "prospek karir Computer Science"
 
 
+class TestRepairCondensedQuery:
+    """The deterministic post-condense repair: it fixes the two ways the LLM corrupts a
+    follow-up's SUBJECT (substitution / loss) and, just as importantly, leaves every
+    faithful rewrite untouched. Pure function -- no LLM/GPU/network."""
+
+    _CATALOG = [
+        "Artificial Intelligence", "Computer Science", "Computer Science Global Class",
+        "Cyber Security", "Data Science", "Game Application and Technology",
+        "Mathematics and Computer Science", "Mobile Application and Technology",
+        "Software Engineering", "Statistics and Computer Science",
+    ]
+
+    @staticmethod
+    def _h(*turns):
+        return [{"role": r, "content": c} for r, c in turns]
+
+    def _repair(self, history, question, condensed):
+        return _repair_condensed_query(
+            question=question, condensed=condensed, history=history, program_names=self._CATALOG
+        )
+
+    def test_loss_on_terse_followup_regrafts_the_history_subject(self):
+        # "Semester 5?" after a Computer Science thread whose rewrite drops the subject
+        # entirely (matches no program) -> re-scoped to the conversation's program.
+        history = self._h(("user", "mata kuliah cs semester 1"),
+                          ("assistant", "Semester 1 Computer Science: ..."))
+        assert self._repair(history, "Semester 5?", "Sebutkan mata kuliah pada semester 5.") \
+            == "Semester 5? Computer Science"
+
+    def test_loss_on_tell_me_more(self):
+        history = self._h(("user", "tell me about Data Science"), ("assistant", "Data Science is ..."))
+        assert self._repair(history, "tell me more", "Tell me more about the program.") \
+            == "tell me more Data Science"
+
+    def test_substitution_of_a_program_never_discussed_is_dropped(self):
+        # Rewrite invents Software Engineering, which the conversation never named.
+        history = self._h(("user", "what is Computer Science"), ("assistant", "Computer Science is ..."))
+        assert self._repair(history, "what about the fees",
+                            "What are the tuition fees for Software Engineering?") \
+            == "what about the fees Computer Science"
+
+    def test_faithful_pronoun_resolution_is_untouched(self):
+        history = self._h(("user", "what is Cyber Security"), ("assistant", "Cyber Security is ..."))
+        cond = "What are the career prospects for Cyber Security?"
+        assert self._repair(history, "what are its career prospects", cond) == cond
+
+    def test_self_contained_topic_shift_is_untouched(self):
+        # A standalone follow-up that names no program is NOT force-scoped to the old topic.
+        history = self._h(("user", "what is Computer Science"), ("assistant", "Computer Science is ..."))
+        cond = "What scholarships are available?"
+        assert self._repair(history, "what scholarships are available", cond) == cond
+
+    def test_comparison_naming_both_programs_is_untouched(self):
+        history = self._h(("user", "compare Computer Science and Data Science"), ("assistant", "..."))
+        cond = "Does Computer Science or Data Science have better career prospects?"
+        assert self._repair(history, "which has better career prospects", cond) == cond
+
+    def test_variant_the_user_actually_discussed_is_allowed(self):
+        # GCC was named by the USER, so a rewrite resolving to it is faithful, not a swap.
+        history = self._h(("user", "tell me about Computer Science Global Class"), ("assistant", "..."))
+        cond = "What are the fees for Computer Science Global Class?"
+        assert self._repair(history, "what are the fees", cond) == cond
+
+    def test_no_resolvable_subject_falls_back_to_bare_question(self):
+        # Substitution detected but nothing in history to re-scope to -> safe bare original.
+        history = self._h(("user", "hello"), ("assistant", "hi"))
+        assert self._repair(history, "what about the fees",
+                            "What are the tuition fees for Data Science?") == "what about the fees"
+
+
 class TestIsCareerOutcomeQuery:
     """Deterministic career-outcome / "what can I become" detector -- see _CAREER_OUTCOME_RE
     for why condense_question needs this intent flagged (LLM rewrite flipped it into a
@@ -511,12 +582,33 @@ class TestDetectUnresolvedCampusMention:
     path is untouched."""
 
     @pytest.mark.parametrize("query,expected", [
-        ("kampus xyzville ada apa", "xyzville"),
-        ("kampus Kemangisan dimana", "Kemangisan"),   # a real typo of Kemanggisan
-        ("campus Blahblah has what", "Blahblah"),
+        ("kampus Kemangisan dimana", "Kemangisan"),   # a real typo of Kemanggisan (capitalised)
+        ("kampus kemangisan dimana", "kemangisan"),   # same typo lowercase -> close-match branch
+        ("campus Blahblah has what", "Blahblah"),      # proper-noun-style garble
+        ("kampus Zxqville", "Zxqville"),               # capitalised gibberish still fires
     ])
     def test_unrecognized_campus_token_is_returned(self, query, expected):
         assert detect_unresolved_campus_mention(query, _KNOWN_CAMPUSES) == expected
+
+    @pytest.mark.parametrize("query", [
+        # English word order puts the name BEFORE "campus"; the trailing word is an
+        # ordinary noun, not a garbled campus name -- must degrade to the contextual
+        # fallback, never a spurious "which campus did you mean?". (Regression: these all
+        # used to fire because the anchor blindly returned the word after "campus".)
+        "Is the campus wheelchair accessible?",
+        "What are the campus facilities?",
+        "Where is the campus map?",
+        "How is campus life at BINUS?",
+        "Is campus wifi free?",
+        "What is the campus address?",
+        "How is campus security at night?",
+        "Is the campus safe?",
+        "Is the campus open on weekends?",
+        # Lowercase gibberish with no resemblance to any real name -> fallback, not a dump.
+        "kampus xyzville ada apa",
+    ])
+    def test_english_common_noun_after_campus_does_not_fire(self, query):
+        assert detect_unresolved_campus_mention(query, _KNOWN_CAMPUSES) is None
 
     @pytest.mark.parametrize("query", [
         "kampus alsut ada jurusan apa",   # known alias -> already handled, don't clarify
@@ -546,12 +638,25 @@ class TestDetectUnresolvedCampusMention:
 
 class TestDetectUnresolvedProgramMention:
     @pytest.mark.parametrize("query,expected", [
-        ("jurusan xyzology apa", "xyzology"),
         ("program Komputer", "Komputer"),   # a bare partial, not the full "Ilmu Komputer"
         ("prodi Blahblah", "Blahblah"),
+        ("jurusan Zxqbotics", "Zxqbotics"),  # capitalised gibberish still fires
     ])
     def test_unrecognized_program_token_is_returned(self, query, expected):
         assert detect_unresolved_program_mention(query, _CATALOG) == expected
+
+    @pytest.mark.parametrize("query", [
+        # "program"/"major" followed by an ordinary English noun (English word order puts
+        # the program name first) -- not a garbled program, must not clarify.
+        "What is the program duration?",
+        "Is the program accredited?",
+        "What program should I choose?",
+        "Tell me about the major requirements",
+        # Lowercase gibberish, no near name -> contextual fallback, not a clarification.
+        "jurusan xyzology apa",
+    ])
+    def test_english_common_noun_after_program_does_not_fire(self, query):
+        assert detect_unresolved_program_mention(query, _CATALOG) is None
 
     @pytest.mark.parametrize("query", [
         "program Computer Science",              # full catalog name
