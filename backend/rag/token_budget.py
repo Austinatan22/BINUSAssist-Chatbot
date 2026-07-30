@@ -1,14 +1,15 @@
 """Soft daily token budget (IMPROVEMENTS.md #3.2).
 
-Groq's daily token limit (TPD) was exhausted from eval traffic alone during development
-(see PROJECT_LOG.md) -- nothing in production stops real traffic, or abuse, from doing
-the same and taking the bot down for the rest of the day with a hard provider error.
+A provider's daily token limit is easy to exhaust -- Groq's TPD went from eval traffic
+alone during development (see PROJECT_LOG.md) -- and nothing in production stops real
+traffic, or abuse, from doing the same and taking the bot down for the rest of the day
+with a hard provider error. Provider-agnostic: it caps whatever LLM is configured.
 
 Wraps llama-index's built-in TokenCountingHandler, attached to Settings.callback_manager
 in backend/rag/models.py so it observes every real Settings.llm call across the process
 (condense_question, the named-program classifier, paraphrase rewriting, and the main
 generation call all share the one Settings.llm instance). It reads actual usage off each
-Groq response when present, falling back to a tokenizer estimate only if a response
+LLM response when present, falling back to a tokenizer estimate only if a response
 lacks a usage field -- not a guess-based heuristic.
 
 Deliberately NOT using the handler's own built-in `token_budget` param: that raises a
@@ -57,7 +58,7 @@ def _roll_over_if_new_day() -> None:
 
 
 def is_budget_exceeded() -> bool:
-    """True once today's cumulative Groq LLM token usage (prompt + completion, across
+    """True once today's cumulative LLM token usage (prompt + completion, across
     every request this process has served today) has crossed settings.daily_token_budget.
     A budget of 0 disables the check entirely (always False)."""
     if not settings.daily_token_budget:

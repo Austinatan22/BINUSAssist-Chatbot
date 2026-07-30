@@ -17,7 +17,7 @@ def build_fusion_retriever(index: VectorStoreIndex) -> QueryFusionRetriever:
     """Combine dense vector search and BM25 sparse search via reciprocal rank fusion.
 
     num_queries=1 disables QueryFusionRetriever's default LLM-based query expansion
-    (which would otherwise fire an extra Groq call per request).
+    (which would otherwise fire an extra LLM call per request).
     """
     dense_retriever = index.as_retriever(similarity_top_k=settings.retrieval_top_k)
     bm25_retriever = BM25Retriever.from_defaults(
@@ -264,8 +264,8 @@ async def retrieve_for_named_programs(
     # fused-retrieval path enforces via build_reranker's top_n) -- len(source_files) *
     # per_program_top_n has no upper bound on its own, and an uncapped node list here
     # means an uncapped prompt size. Found live: pushed a single request's prompt past
-    # Groq's per-minute token limit (413 Payload Too Large) even though the daily budget
-    # (#3.2) had plenty of room left -- a different limit than the one that guards against.
+    # the LLM provider's per-minute token limit (413 Payload Too Large) even though the daily
+    # budget (#3.2) had plenty of room left -- a different limit than the one that guards against.
     return all_nodes[:cap]
 
 

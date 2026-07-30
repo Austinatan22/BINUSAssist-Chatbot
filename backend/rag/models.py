@@ -124,7 +124,7 @@ def init_models() -> None:
 
     Settings.llm = _build_llm()
 
-    # Daily token budget (IMPROVEMENTS.md #3.2): observes every real Groq call through
+    # Daily token budget (IMPROVEMENTS.md #3.2): observes every real LLM call through
     # the shared Settings.llm instance -- see backend/rag/token_budget.py for why.
     Settings.callback_manager = CallbackManager([get_token_counter()])
 

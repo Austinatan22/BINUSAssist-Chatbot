@@ -76,21 +76,39 @@ class FeedbackRequest(BaseModel):
     helpful: bool
 
 
-async def _check_groq_reachable() -> bool:
-    """Lightweight reachability probe: lists models rather than running a completion, so
-    this never consumes generation tokens or counts against the chat rate limit -- with
-    today's repeated daily-quota exhaustion fresh in mind, a health check must not itself
-    be a source of token spend. Opt-in via /health?deep=true only (see health()), never
-    run on a plain /health call, since a monitoring tool polling that endpoint every few
-    seconds would otherwise add a constant background load of real Groq API calls for no
-    operational benefit.
+def _active_llm_key_and_probe_url() -> tuple[str, str | None]:
+    """(api_key, list-models URL) for the ACTIVE provider (settings.llm_provider), so the
+    health check reflects whatever LLM is configured -- OpenAI by default -- rather than
+    hardwiring one vendor. URL is None if the provider has no cheap list-models probe."""
+    provider = settings.llm_provider
+    if provider == "openai":
+        return settings.openai_api_key, "https://api.openai.com/v1/models"
+    if provider == "groq":
+        return settings.groq_api_key, "https://api.groq.com/openai/v1/models"
+    if provider == "gemini":
+        # Gemini authenticates the list-models call with a ?key= query param, not a header.
+        key = settings.gemini_api_key
+        return key, (f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
+                     if key.strip() else None)
+    return "", None
+
+
+async def _check_llm_reachable() -> bool:
+    """Lightweight reachability probe for the ACTIVE LLM provider: lists models rather than
+    running a completion, so this never consumes generation tokens or counts against the chat
+    rate limit -- with past daily-quota exhaustion in mind, a health check must not itself be
+    a source of token spend. Opt-in via /health?deep=true only (see health()), never run on a
+    plain /health call, since a monitor polling every few seconds would otherwise add a
+    constant background load of real API calls for no operational benefit.
     """
+    api_key, url = _active_llm_key_and_probe_url()
+    if not url:
+        return False
+    # OpenAI/Groq use a Bearer header; Gemini carries its key in the URL (handled above).
+    headers = {} if settings.llm_provider == "gemini" else {"Authorization": f"Bearer {api_key}"}
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(
-                "https://api.groq.com/openai/v1/models",
-                headers={"Authorization": f"Bearer {settings.groq_api_key}"},
-            )
+            response = await client.get(url, headers=headers)
             return response.status_code == 200
     except httpx.HTTPError:
         return False
@@ -102,12 +120,13 @@ async def health(deep: bool = False):
     always "ok" even when the index hadn't loaded, so this couldn't actually distinguish
     a healthy server from a degraded one. Now reports GPU/device state (a silent CUDA ->
     CPU embedding fallback is 10-15x slower and previously only visible in logs) and
-    whether GROQ_API_KEY is configured, and folds all of it into `status`. `deep=true`
-    adds a real Groq network reachability check (see _check_groq_reachable) -- opt-in,
-    not on every call, to keep this endpoint itself cheap and quota-free by default.
+    whether the ACTIVE LLM provider's API key is configured, and folds all of it into
+    `status`. `deep=true` adds a real reachability check against that provider (see
+    _check_llm_reachable) -- opt-in, not on every call, to keep this endpoint itself cheap
+    and quota-free by default.
     """
     index_loaded = app_state.get("index") is not None
-    groq_api_key_configured = bool(settings.groq_api_key.strip())
+    llm_api_key_configured = bool(_active_llm_key_and_probe_url()[0].strip())
     gpu_available = torch.cuda.is_available()
 
     body = {
@@ -115,13 +134,14 @@ async def health(deep: bool = False):
         "gpu_available": gpu_available,
         "embedding_device": app_state.get("embedding_device"),
         "reranker_device_configured": settings.reranker_device,
-        "groq_api_key_configured": groq_api_key_configured,
+        "llm_provider": settings.llm_provider,
+        "llm_api_key_configured": llm_api_key_configured,
     }
 
     if deep:
-        body["groq_reachable"] = groq_api_key_configured and await _check_groq_reachable()
+        body["llm_reachable"] = llm_api_key_configured and await _check_llm_reachable()
 
-    healthy = index_loaded and groq_api_key_configured and (not deep or body["groq_reachable"])
+    healthy = index_loaded and llm_api_key_configured and (not deep or body["llm_reachable"])
     body["status"] = "ok" if healthy else "degraded"
     return body
 

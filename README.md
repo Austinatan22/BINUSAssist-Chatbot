@@ -7,7 +7,7 @@ A RAG (Retrieval-Augmented Generation) chatbot for BINUS School of Computer Scie
 - **Backend**: FastAPI + LlamaIndex. Documents (PDF/DOCX program guides) are parsed with Docling, chunked with a parent-child split, and embedded with `BAAI/bge-m3` into a ChromaDB vector store.
 - **Retrieval**: Hybrid dense + BM25 search fused via `QueryFusionRetriever` (top 20 each → reciprocal-rank fusion → top 15), then reranked with a `BAAI/bge-reranker-v2-m3` cross-encoder down to the top 5 chunks actually sent to the LLM.
 - **Confidence gate**: if the top reranked chunk scores below a threshold, the query is retried with LLM-generated paraphrases; if it still scores too low, the chatbot returns a fallback message with contact info instead of guessing.
-- **Generation**: Groq-hosted `llama-3.1-8b-instant` (temperature 0.0, pinned in `config.py`), streamed token-by-token over SSE.
+- **Generation**: OpenAI `gpt-4o-mini` (temperature 0.0, pinned in `config.py`), streamed token-by-token over SSE. The provider is swappable via `LLM_PROVIDER` — Groq (`llama-3.1-8b-instant`) and Gemini are also wired up behind one LlamaIndex `Settings.llm`.
 - **Frontend**: React 19 + Vite + Tailwind. Chat UI with streaming responses, source citations panel, starter questions, and an admin panel (document management, starter questions, fallback contacts, account settings) gated behind HTTP Basic auth.
 
 ```
@@ -27,7 +27,7 @@ scripts/
 
 ## Setup (local development)
 
-**Prerequisites**: Python 3.12, Node 18+, an NVIDIA GPU + CUDA for `EMBEDDING_DEVICE=cuda`/`RERANKER_DEVICE=cuda` (or set both to `cpu` if you don't have one), and a [Groq API key](https://console.groq.com).
+**Prerequisites**: Python 3.12, Node 18+, an NVIDIA GPU + CUDA for `EMBEDDING_DEVICE=cuda`/`RERANKER_DEVICE=cuda` (or set both to `cpu` if you don't have one), and an [OpenAI API key](https://platform.openai.com/api-keys) (the default provider; ~$3/mo at ~5k requests on `gpt-4o-mini`).
 
 1. **Backend**
    ```
@@ -36,7 +36,7 @@ scripts/
    pip install torch==2.12.0+cu126 torchvision==0.27.0+cu126 --index-url https://download.pytorch.org/whl/cu126
    pip install -r requirements.txt
    ```
-   Copy `.env.example` to `.env` and fill in `GROQ_API_KEY`.
+   Copy `.env.example` to `.env` and fill in `OPENAI_API_KEY`.
 
 2. **Create an admin account** (there's no web signup by design):
    ```
@@ -61,7 +61,7 @@ scripts/
 ```
 docker compose up --build
 ```
-Builds and runs `backend` (GPU-enabled, port 8000) and `frontend` (port 5173) per [`docker-compose.yml`](docker-compose.yml). Requires `.env` with `GROQ_API_KEY` and the NVIDIA Container Toolkit for GPU passthrough.
+Builds and runs `backend` (GPU-enabled, port 8000) and `frontend` (port 5173) per [`docker-compose.yml`](docker-compose.yml). Requires `.env` with `OPENAI_API_KEY` and the NVIDIA Container Toolkit for GPU passthrough.
 
 **The knowledge base is seeded automatically on first boot.** The container's entrypoint runs
 [`scripts/seed_if_empty.py`](scripts/seed_if_empty.py) before starting the API: if the mounted
@@ -74,7 +74,7 @@ Two things to have in place before the first boot, since both are runtime data, 
 - **Program documents** in `backend/documents/` on the host (PDF/DOCX) — mounted into the
   container. Without them the KB seeds empty and every query falls back until documents are
   added (via the mount or the admin panel).
-- **`.env`** with `GROQ_API_KEY` (and `DOMAIN` for the prod HTTPS setup below).
+- **`.env`** with `OPENAI_API_KEY` (and `DOMAIN` for the prod HTTPS setup below).
 
 For a public deployment without a GPU, [`docker-compose.prod.yml`](docker-compose.prod.yml) adds a Caddy reverse proxy (automatic HTTPS via `DOMAIN` in `.env`) and uses the CPU-only backend image (`backend/Dockerfile.cpu`):
 ```
@@ -97,12 +97,12 @@ Each run writes a timestamped `eval_results_*.json` with every question's answer
 
 ## Unit tests & regression eval
 
-`tests/` covers the pure, deterministic helpers behind retrieval/chunking/caching (smalltalk detection, chunk-boilerplate filters, the semantic cache's safety gates, etc.) plus a **labeled regression eval** ([`tests/regression_cases.py`](tests/regression_cases.py)) over the two behaviours that repeatedly regressed — program routing and language detection. Both are deterministic (program routing is decided by literal matching, not an LLM — see the classifier in [`backend/rag/generation.py`](backend/rag/generation.py)), so the real bug cases are guarded with no GPU, Groq, or network, and it all runs in a few seconds:
+`tests/` covers the pure, deterministic helpers behind retrieval/chunking/caching (smalltalk detection, chunk-boilerplate filters, the semantic cache's safety gates, etc.) plus a **labeled regression eval** ([`tests/regression_cases.py`](tests/regression_cases.py)) over the two behaviours that repeatedly regressed — program routing and language detection. Both are deterministic (program routing is decided by literal matching, not an LLM — see the classifier in [`backend/rag/generation.py`](backend/rag/generation.py)), so the real bug cases are guarded with no GPU, LLM API, or network, and it all runs in a few seconds:
 ```
 pip install pytest
 pytest
 ```
-Runs automatically on every push/PR via GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)), alongside a frontend lint + build check. The full, model-dependent eval (retrieval and answer quality) lives in `scripts/eval.py` (see [Evaluation](#evaluation) above) and is run manually, since it needs the GPU models and a real Groq key.
+Runs automatically on every push/PR via GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)), alongside a frontend lint + build check. The full, model-dependent eval (retrieval and answer quality) lives in `scripts/eval.py` (see [Evaluation](#evaluation) above) and is run manually, since it needs the GPU models and a real OpenAI key.
 
 ## Notes
 

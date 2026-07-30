@@ -397,8 +397,8 @@ async def run_one(service: ChatService, entry: dict) -> dict:
         "query_type": log_capture.get("query_type"),  # richer than the old bool: single/
         # comparison/clarification_campus/clarification_program/budget_exceeded/cache_hit/smalltalk
         # first_token_latency includes retrieval (it all happens inside stream() before token 1);
-        # the retrieval-vs-Groq split the old hand-rolled path exposed isn't separable through the
-        # public stream, so groq_first_token_s is no longer reported.
+        # the retrieval-vs-generation split the old hand-rolled path exposed isn't separable through
+        # the public stream, so a separate generation-latency figure is no longer reported.
         "first_token_latency_s": round(first_token_latency, 3) if first_token_latency else None,
         "total_latency_s": round(total_latency, 3),
         "fallback_triggered": fallback_triggered,
@@ -437,8 +437,9 @@ async def main() -> None:
 
     results = []
     for i, entry in enumerate(ALL_QUESTIONS, 1):
-        # Groq's free tier caps at 30 RPM; firing all questions back-to-back would
-        # trigger client-side retry/backoff and measure that instead of real latency.
+        # Space out requests to stay under the LLM provider's rate limit (Groq's free tier
+        # capped at 30 RPM; OpenAI's tiers are higher, but pacing keeps a burst from
+        # triggering client-side retry/backoff and measuring that instead of real latency).
         if i > 1:
             await asyncio.sleep(2.5)
         print(f"[{i}/{len(ALL_QUESTIONS)}] ({entry['category']}) {entry['question'][:80]!r}")

@@ -6,7 +6,7 @@ latency. This turns that raw log into a report, so the bot becomes a feedback lo
 the headline signal is FALLBACKS grouped by query ("15 people asked about housing this week;
 we have nothing on it"), which are a direct pointer at content gaps.
 
-Pure JSONL parsing -- no models, GPU, Groq, or network, so it's fast and runs anywhere. All
+Pure JSONL parsing -- no models, GPU, LLM API, or network, so it's fast and runs anywhere. All
 the aggregation lives in pure functions (summarize / *_breakdown / top_*) that take a list of
 record dicts, so they're unit-tested directly (tests/test_log_analytics.py) without touching
 the filesystem. Tolerates schema drift: every field is read with .get(), since older records

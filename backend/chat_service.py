@@ -215,7 +215,7 @@ class ChatService:
 
         # "Ask, don't guess" (see _route_retrieval's tail): the query named a campus/
         # program we couldn't resolve, so ask which one rather than dead-ending. Checked
-        # before the budget gate because it's a deterministic emission with no Groq call,
+        # before the budget gate because it's a deterministic emission with no LLM call,
         # so it stays helpful even when generation is otherwise declined. Deliberately NOT
         # wired through _cache_after_stream: the message embeds the user's specific garbled
         # term, which must never be replayed to a different user's different typo -- the
@@ -236,8 +236,8 @@ class ChatService:
                 term, suggestions, known, kind, detect_language(plan.standalone_query)
             )
         # Soft daily token budget (IMPROVEMENTS.md #3.2): decline generation before it
-        # ever reaches Groq once today's usage crosses the cap. A cache hit already
-        # returned above and never reaches here, so it keeps working regardless.
+        # ever reaches the LLM provider once today's usage crosses the cap. A cache hit
+        # already returned above and never reaches here, so it keeps working regardless.
         elif is_budget_exceeded():
             logger.warning("DAILY_TOKEN_BUDGET_EXCEEDED query=%r", message)
             log_entry["query_type"] = "budget_exceeded"
@@ -608,8 +608,8 @@ class ChatService:
     async def _cache_after_stream(self, stream, plan: Plan):
         """Populates the semantic cache once the full answer is known, without buffering
         (tokens still reach the client immediately). Skips a transient service-error
-        response (Groq failure), which has nothing to do with the question or KB state and
-        would otherwise be replayed to identical questions long after Groq recovers."""
+        response (an LLM-provider failure), which has nothing to do with the question or KB
+        state and would otherwise be replayed to identical questions long after it recovers."""
         service_error_texts = {get_service_error_message("id"), get_service_error_message("en")}
 
         accumulated = ""

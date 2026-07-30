@@ -32,7 +32,7 @@ jobs:
       # deterministic intent detectors (career-outcome / who-teaches / leadership) -- the
       # behaviours that repeatedly regressed. All deterministic (literal matching + regex,
       # not free-text LLM output since IMPROVEMENTS.md #2), so they guard the real bug cases
-      # here with no GPU or Groq. The model-dependent eval (retrieval/answer quality) stays
+      # here with no GPU or LLM API. The model-dependent eval (retrieval/answer quality) stays
       # in scripts/eval.py, run manually -- see the note at the bottom of this file.
       - name: Run unit tests + regression eval
         run: pytest
@@ -65,7 +65,7 @@ jobs:
 # tests/regression_cases.py, the single extensible place to record a query that broke.
 # What still runs only manually is the FULL, model-dependent eval (scripts/eval.py): it
 # drives the real ChatService, so it needs a seeded ChromaDB index, GPU-loaded embedding/
-# reranker models, and a real GROQ_API_KEY, i.e. secrets, a committed test-KB fixture, and
-# real Groq token spend on every push. That heavier lift is a separate, deliberate addition
+# reranker models, and a real OPENAI_API_KEY, i.e. secrets, a committed test-KB fixture, and
+# real OpenAI token spend on every push. That heavier lift is a separate, deliberate addition
 # if/when its cost is worth paying (IMPROVEMENTS.md #7.3), not bundled here -- the
 # deterministic half above is the CI-able slice of it.

@@ -513,8 +513,8 @@ def _scrub_injection_attempts(text: str, source: str) -> str:
 # every other program just to be recognized as on-topic, and a row can be fragmented
 # across a chunk boundary. Confirmed live: "tuition fees for Computer Science" only
 # ever surfaced 2 of the 7 campuses that actually offer Computer Science, because the
-# final context budget (settings.rerank_top_n, kept small to respect Groq's per-minute
-# token limit) was being spent on giant multi-program table fragments instead of small,
+# final context budget (settings.rerank_top_n, kept small to respect the LLM provider's
+# per-minute token limit) was being spent on giant multi-program table fragments instead of small,
 # precisely on-topic rows.
 _TUITION_FEE_URL_RE = re.compile(r"^https://gabung\.binus\.ac\.id/tuition-fee/", re.IGNORECASE)
 _ACADEMIC_YEAR_RE = re.compile(r"ACADEMIC YEAR\s+(\d{4}/\d{4})", re.IGNORECASE)
