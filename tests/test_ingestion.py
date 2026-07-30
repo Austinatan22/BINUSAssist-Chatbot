@@ -16,6 +16,7 @@ import backend.rag.ingestion as ingestion
 from backend.config import settings
 from backend.rag.ingestion import (
     IngestionError,
+    admission_requirement_url_for_campus,
     _campus_label,
     _check_zip_bomb,
     _docling_page_texts,
@@ -29,6 +30,7 @@ from backend.rag.ingestion import (
     _parent_child_split,
     _recover_dropped_credit_total,
     _recover_career_list,
+    _course_scu_row_nodes,
     _CS_CAREER_ROLES,
     _scrub_injection_attempts,
     _section_headers,
@@ -128,6 +130,68 @@ class TestRecoverCareerList:
     def test_non_pdf_ignored(self, tmp_path):
         p = tmp_path / "x.docx"
         assert _recover_career_list(p, self.IMAGE_ONLY) is None
+
+
+class TestCourseScuRowNodes:
+    """One self-describing node per course row so per-course SCU lookups retrieve the course
+    and its credit value together (the large course tables otherwise fragment, separating a
+    row from its 'SCU' header). See _course_scu_row_nodes."""
+
+    TABLE = (
+        "# Course Structure\n\n"
+        "| Sem | Code | Course Name | SCU | Total |\n"
+        "|-----|------|-------------|-----|-------|\n"
+        "| 1 | COMP1 | Discrete Mathematics | 4 | 20 |\n"
+        "| 1 | COMP2 | Algorithm and Programming 2 (AOL) | 4/2 | 20 |\n"
+        "| 2 | COMP3 | Data Structures 1&2 | 4/2 | 20 |\n"
+        "|  | COMP4 | Operating System | 2 |  |\n"
+        "| 5 | COMP5 | Computer Graphics | 2/2 | Streaming: 18/20 |\n"
+        "| 5 | COMP6 | Stream: AI-Driven Development |  | Streaming: 18/20 |\n"
+    )
+
+    def _texts(self, tmp_path, table, name="Computer_Science_2026.pdf"):
+        nodes = _course_scu_row_nodes(tmp_path / name, table)
+        return [n.get_content() for n in nodes]
+
+    def test_emits_one_node_per_course_with_scu_inline(self, tmp_path):
+        texts = self._texts(tmp_path, self.TABLE)
+        assert "Computer Science program -- Discrete Mathematics: 4 SCU (Semester 1)" in texts
+        assert "Computer Science program -- Computer Graphics: 2/2 SCU (Semester 5)" in texts
+
+    def test_strips_aol_noise_from_course_name(self, tmp_path):
+        texts = self._texts(tmp_path, self.TABLE)
+        assert "Computer Science program -- Algorithm and Programming 2: 4/2 SCU (Semester 1)" in texts
+
+    def test_carries_semester_forward_across_blank_sem_cells(self, tmp_path):
+        texts = self._texts(tmp_path, self.TABLE)
+        # Operating System's Sem cell is blank -> carries the previous row's semester (2).
+        assert "Computer Science program -- Operating System: 2 SCU (Semester 2)" in texts
+
+    def test_skips_rows_without_a_credit_value(self, tmp_path):
+        # The "Stream: ..." row has a blank SCU cell -> no node (never guessed at).
+        texts = self._texts(tmp_path, self.TABLE)
+        assert not any("Stream: AI-Driven Development" in t for t in texts)
+
+    def test_no_op_for_a_table_without_an_scu_column(self, tmp_path):
+        table = (
+            "| Sem | Code | Course Name | Total |\n"
+            "|-----|------|-------------|-------|\n"
+            "| 1 | COMP1 | Discrete Mathematics | 20 |\n"
+        )
+        assert self._texts(tmp_path, table) == []
+
+    def test_dedups_a_repeated_row(self, tmp_path):
+        table = (
+            "| Sem | Code | Course Name | SCU | Total |\n"
+            "|-----|------|-------------|-----|-------|\n"
+            "| 1 | COMP1 | Discrete Mathematics | 4 | 20 |\n"
+            "| 1 | COMP1 | Discrete Mathematics | 4 | 20 |\n"
+        )
+        assert len(self._texts(tmp_path, table)) == 1
+
+    def test_program_name_derived_from_filename(self, tmp_path):
+        texts = self._texts(tmp_path, self.TABLE, name="Cyber_Security_2025.pdf")
+        assert all(t.startswith("Cyber Security program -- ") for t in texts)
 
 
 class TestIsCrossProgramPartnerTable:
@@ -355,6 +419,31 @@ class TestScrapedUrlPersistence:
         record_scraped_url("https://example.com/b")
         forget_scraped_url("https://example.com/a")
         assert load_scraped_urls() == ["https://example.com/b"]
+
+    def test_admission_url_for_campus_resolves_by_canonical_name(self):
+        record_scraped_url("https://gabung.binus.ac.id/admission-requirement/?campus-location=binus-kemanggisan")
+        record_scraped_url("https://gabung.binus.ac.id/admission-requirement/?campus-location=binus-alam-sutera")
+        record_scraped_url("https://gabung.binus.ac.id/tuition-fee/?degree=s1&campus-location=binus-kemanggisan")
+        assert admission_requirement_url_for_campus("Kemanggisan") == \
+            "https://gabung.binus.ac.id/admission-requirement/?campus-location=binus-kemanggisan"
+        # multi-word campus name derived from the slug
+        assert admission_requirement_url_for_campus("Alam Sutera") == \
+            "https://gabung.binus.ac.id/admission-requirement/?campus-location=binus-alam-sutera"
+
+    def test_admission_url_for_campus_uses_the_label_overrides(self):
+        record_scraped_url("https://gabung.binus.ac.id/admission-requirement/?campus-location=binus-aso")
+        record_scraped_url("https://gabung.binus.ac.id/admission-requirement/?campus-location=binus-online")
+        assert admission_requirement_url_for_campus("ASO").endswith("campus-location=binus-aso")
+        assert admission_requirement_url_for_campus("Online Learning").endswith("campus-location=binus-online")
+
+    def test_admission_url_for_unknown_campus_is_none(self):
+        record_scraped_url("https://gabung.binus.ac.id/admission-requirement/?campus-location=binus-kemanggisan")
+        assert admission_requirement_url_for_campus("Jakarta") is None
+
+    def test_admission_url_ignores_non_admission_pages(self):
+        # Only a tuition page for this campus -> no admission-requirement URL to return.
+        record_scraped_url("https://gabung.binus.ac.id/tuition-fee/?degree=s1&campus-location=binus-medan")
+        assert admission_requirement_url_for_campus("Medan") is None
 
     def test_forgetting_an_unrecorded_url_is_a_no_op(self):
         record_scraped_url("https://example.com/a")

@@ -19,6 +19,7 @@ from backend.config import (
     settings,
 )
 from backend.rag import prompts
+from backend.rag.cache import detect_aspects
 
 logger = logging.getLogger(__name__)
 
@@ -513,6 +514,36 @@ def _is_referential_followup(question: str) -> bool:
     return len(question.split()) <= 2
 
 
+# A short, English retrieval phrase per aspect (detect_aspects tag) for the aspect-carryover
+# repair below. English because the KB's admission/requirement/tuition pages are English-headed
+# and it's a retrieval-only string (the user still sees their own wording at generation) -- the
+# same reasoning as condense_question's "career prospects graduates" graft. One phrase per tag,
+# not the full keyword list, so the grafted query reads like a real question rather than a bag
+# of synonyms.
+_ASPECT_RETRIEVAL_TERM = {
+    "admission": "admission requirements",
+    "tuition": "tuition fee",
+    "career": "career prospects",
+    "curriculum": "curriculum courses",
+    "outcome": "learning outcomes",
+    "scholarship": "scholarship",
+}
+
+
+def _history_aspect(history: list[dict]) -> str | None:
+    """The single dominant aspect (admission/tuition/career/...) the USER raised across recent
+    history, or None if zero -- or more than one -- were raised. Only an UNAMBIGUOUS
+    conversation topic is re-graftable; if the user touched several aspects there's no safe way
+    to pick one for a bare follow-up, so we don't guess. User turns only, same reasoning as
+    _topic_program_from_history: an assistant answer routinely name-drops adjacent aspects in
+    passing, which must not be mistaken for the topic the user is actually pursuing."""
+    aspects: set[str] = set()
+    for turn in _recent_history(history):
+        if turn.get("role") == "user":
+            aspects |= detect_aspects(turn.get("content", ""))
+    return next(iter(aspects)) if len(aspects) == 1 else None
+
+
 def _repair_condensed_query(
     question: str, condensed: str, history: list[dict], program_names: list[str]
 ) -> str:
@@ -553,13 +584,32 @@ def _repair_condensed_query(
         and bool(allowed)
         and _is_referential_followup(question)
     )
-    if not (substituted or lost):
-        return condensed
+    if substituted or lost:
+        topic = _topic_program_from_history(history, program_names)
+        if not topic:
+            return question
+        return f"{question} {topic}"
 
-    topic = _topic_program_from_history(history, program_names)
-    if not topic:
-        return question
-    return f"{question} {topic}"
+    # 3. Aspect loss -- a referential follow-up that shifts SCOPE (e.g. a degree tier: "bagaimana
+    #    s1" after a thread about admission requirements) but names no aspect itself, so it
+    #    depends on the conversation for what's being ASKED. Confirmed live: "bagaimana s1" after
+    #    a requirements/minimum-grades thread condensed to a generic "program S1" query that
+    #    matched no single doc and fell back, while the same question WITH the aspect ("bagaimana
+    #    requirement s1") retrieved at 0.96. Only fires when the follow-up AND the condensed
+    #    output are both aspect-less and the conversation had exactly one aspect -- so a
+    #    self-contained question, or one the model already condensed correctly, is left alone.
+    #    Deliberately checked AFTER the program branch: a resolvable program subject is the
+    #    stronger signal, and the two grafts are mutually exclusive by construction here (this
+    #    only runs when no program was substituted or lost).
+    if (
+        _is_referential_followup(question)
+        and not detect_aspects(question)
+        and not detect_aspects(condensed)
+    ):
+        aspect = _history_aspect(history)
+        if aspect:
+            return f"{question} {_ASPECT_RETRIEVAL_TERM[aspect]}"
+    return condensed
 
 
 def normalize_campus_aliases(query: str) -> str:
@@ -573,6 +623,71 @@ def normalize_campus_aliases(query: str) -> str:
         for alias in aliases:
             query = re.sub(rf"\b{re.escape(alias)}\b", canonical, query, flags=re.IGNORECASE)
     return query
+
+
+# "What programs / majors are offered at campus X" -- an enumeration intent that has to be
+# scoped to that campus's admission-requirement page. In open retrieval a single faculty bio
+# reranks ~0.93 for "program ... kampus X" (it name-drops the program, the campus and "BINUS"),
+# outranking the actual program list, and the model then declines on the faculty-dominated
+# context. Confirmed live for BOTH "program apa saja di binus anggrek" (alias -> Kemanggisan)
+# and the plain "...kemanggisan"; scoping to the one page that lists the programs fixes both.
+_CAMPUS_PROGRAMS_RE = re.compile(
+    r"(?:"
+    r"(?:program(?:\s+studi)?|prodi|jurusan)\s+apa(?:\s*saja)?"          # "program apa saja", "jurusan apa"
+    r"|apa\s*saja\s+(?:program(?:\s+studi)?|prodi|jurusan)"              # "apa saja jurusan"
+    r"|(?:program(?:\s+studi)?|prodi|jurusan)\s+yang\s+(?:ada|tersedia|ditawarkan)"
+    r"|what\s+(?:programs?|majors?|study\s+programs?)"
+    r"|which\s+(?:programs?|majors?)"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def is_campus_programs_query(query: str) -> bool:
+    """True for "what programs/majors are offered at ..." enumeration questions -- see
+    _CAMPUS_PROGRAMS_RE. Only an intent signal; chat_service additionally requires that the
+    query names a resolvable campus (resolve_named_campus) before scoping to it, so a general
+    "what programs does BINUS offer" without a campus still takes the normal path."""
+    return bool(_CAMPUS_PROGRAMS_RE.search(query))
+
+
+def resolve_named_campus(query: str, known_names: Iterable[str]) -> str | None:
+    """The canonical campus a query names -- via a known informal alias (normalize_campus_
+    aliases, e.g. "anggrek" -> Kemanggisan) or by naming a real campus outright -- returned as
+    known_campus_names yields it (no "BINUS " prefix), or None. Longest name first so a
+    multi-word campus ("Alam Sutera") wins over any shorter substring match."""
+    normalized = normalize_campus_aliases(query).lower()
+    for name in sorted(known_names, key=len, reverse=True):
+        if re.search(rf"\b{re.escape(name.lower())}\b", normalized):
+            return name
+    return None
+
+
+def campus_alias_note(query: str) -> str | None:
+    """A one-line note for GENERATION when the user's query uses an informal campus alias
+    whose canonical name is what the retrieved context actually uses. normalize_campus_aliases
+    rewrites the alias for RETRIEVAL only, so the model ends up reading context about (e.g.)
+    "Kemanggisan" while the question in front of it still says "Anggrek" -- finding no literal
+    "Anggrek", it faithfully declines. Confirmed live: "program apa saja di binus anggrek"
+    retrieved Kemanggisan's program list at 0.927 yet still returned the fallback. This note
+    bridges that gap without altering the user's own wording. Returns None when no known alias
+    appears, so generation is untouched for every other query.
+
+    Mirrors normalize_campus_aliases's alias table exactly -- same collision caveat on
+    "Anggrek" (also Indonesian for "orchid"); see _CAMPUS_ALIASES's docstring."""
+    query_lower = query.lower()
+    pairs = []
+    for canonical, aliases in _CAMPUS_ALIASES.items():
+        for alias in aliases:
+            if re.search(rf"\b{re.escape(alias.lower())}\b", query_lower):
+                pairs.append((alias, canonical))
+    if not pairs:
+        return None
+    parts = "; ".join(f'"{alias}" refers to the BINUS {canonical} campus' for alias, canonical in pairs)
+    return (
+        f"Note: {parts}. Treat the alias and the campus's full name as the same campus "
+        f"-- the context uses the full name."
+    )
 
 
 def _literal_program_matches(query: str, program_names: list[str]) -> list[str]:
@@ -1288,6 +1403,7 @@ def build_messages(
     nodes: list[NodeWithScore],
     history: list[dict] | None = None,
     is_comparison: bool = False,
+    alias_note: str | None = None,
 ) -> tuple[list[ChatMessage], str]:
     source_ids = _assign_source_ids(nodes)
     # One citation id per source (R-02: cite via the larger parent chunk for fuller
@@ -1322,6 +1438,11 @@ def build_messages(
         context_blocks.append(f"[{sid}] ({labels[sid]})\n<context-block>\n{text}\n</context-block>")
     context = "\n\n".join(context_blocks)
     query_language = detect_language(query)
+    # An alias note (e.g. "Anggrek" -> Kemanggisan) is appended to the user turn, NOT folded
+    # into a context block: it's guidance about the question's wording, not retrieved source
+    # material, and must not read as citable content. Language detection stays on the raw
+    # query so this English note never flips an Indonesian question's answer language.
+    query_for_prompt = f"{query}\n\n({alias_note})" if alias_note else query
 
     messages = [
         ChatMessage(
@@ -1342,7 +1463,7 @@ def build_messages(
         ChatMessage(
             role=MessageRole.USER,
             content=prompts.ANSWER_USER_TEMPLATE.format(
-                context=context, query=query,
+                context=context, query=query_for_prompt,
                 language_reminder=prompts.language_reminder(query_language),
             ),
         )
@@ -1861,7 +1982,10 @@ async def stream_answer(
             yield event
         return
 
-    messages, context = build_messages(query, nodes, history=history, is_comparison=is_comparison)
+    messages, context = build_messages(
+        query, nodes, history=history, is_comparison=is_comparison,
+        alias_note=campus_alias_note(query),
+    )
     emitted_any = False
     failed = False
     answer_parts: list[str] = []

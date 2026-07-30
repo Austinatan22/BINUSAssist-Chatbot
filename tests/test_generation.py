@@ -40,13 +40,16 @@ from backend.rag.generation import (
     _strip_leading_preamble,
     _strip_trailing_sentinel,
     build_messages,
+    campus_alias_note,
     condense_question,
     detect_language,
     detect_unresolved_campus_mention,
     detect_unresolved_program_mention,
+    is_campus_programs_query,
     is_career_outcome_query,
     is_prompt_extraction_attempt,
     is_leadership_query,
+    resolve_named_campus,
     is_smalltalk,
     is_who_teaches_query,
     comparison_attribute_query,
@@ -505,6 +508,42 @@ class TestRepairCondensedQuery:
         assert self._repair(history, "what about the fees",
                             "What are the tuition fees for Data Science?") == "what about the fees"
 
+    # --- Aspect carryover: a scope-shift follow-up ("bagaimana s1") that depends on the
+    # conversation for WHAT is being asked, when the LLM condense drops that aspect. ---
+
+    def test_aspect_carryover_grafts_the_history_aspect(self):
+        # "bagaimana s1" after a requirements thread; condense drops the aspect to a generic
+        # "program S1" query -> re-graft the conversation's single aspect (admission).
+        history = self._h(("user", "apa requirements untuk gabung binus"),
+                          ("assistant", "Persyaratan untuk gabung BINUS ..."))
+        assert self._repair(history, "bagaimana s1", "Bagaimana program S1 di BINUS?") \
+            == "bagaimana s1 admission requirements"
+
+    def test_aspect_carryover_skipped_when_history_has_multiple_aspects(self):
+        # Two distinct aspects in history (admission + tuition) -> no safe single choice.
+        history = self._h(("user", "apa syarat pendaftaran"), ("user", "berapa biaya kuliahnya"))
+        cond = "Bagaimana program S1?"
+        assert self._repair(history, "bagaimana s1", cond) == cond
+
+    def test_aspect_carryover_skipped_when_condensed_already_has_an_aspect(self):
+        # The LLM already condensed correctly (the aspect survived) -> leave it alone.
+        history = self._h(("user", "apa syarat pendaftaran"), ("assistant", "..."))
+        cond = "Apa saja persyaratan pendaftaran untuk S1?"
+        assert self._repair(history, "bagaimana s1", cond) == cond
+
+    def test_aspect_carryover_skipped_when_followup_names_its_own_aspect(self):
+        history = self._h(("user", "apa requirements untuk daftar"), ("assistant", "..."))
+        cond = "Bagaimana program S1?"
+        # The follow-up itself says "biaya" (tuition) -> not aspect-less, no graft.
+        assert self._repair(history, "bagaimana biaya", cond) == cond
+
+    def test_program_subject_repair_takes_priority_over_aspect(self):
+        # A terse follow-up after a CS + requirements thread: the resolvable PROGRAM subject
+        # is the stronger signal, so program loss re-graft wins over aspect carryover.
+        history = self._h(("user", "apa requirements Computer Science"), ("assistant", "..."))
+        assert self._repair(history, "Semester 5?", "Sebutkan mata kuliah semester 5.") \
+            == "Semester 5? Computer Science"
+
 
 class TestIsCareerOutcomeQuery:
     """Deterministic career-outcome / "what can I become" detector -- see _CAREER_OUTCOME_RE
@@ -650,6 +689,71 @@ class TestNormalizeCampusAliases:
         # name, not a lossy approximation, and verified live to score 0.815+ against real
         # "jurusan"-framed questions once normalized.
         assert normalize_campus_aliases("kampus kijang ada jurusan apa") == "kampus Kemanggisan ada jurusan apa"
+
+
+class TestIsCampusProgramsQuery:
+    """Intent detector for "what programs/majors are offered at ...". Only the intent half;
+    chat_service additionally requires a resolvable campus before scoping."""
+
+    def test_fires_on_indonesian_enumeration(self):
+        assert is_campus_programs_query("program apa saja di binus anggrek")
+        assert is_campus_programs_query("jurusan apa saja di binus alam sutera")
+        assert is_campus_programs_query("prodi apa yang ada di kemanggisan")
+
+    def test_fires_on_english_enumeration(self):
+        assert is_campus_programs_query("what programs are offered at BINUS Bandung")
+        assert is_campus_programs_query("which majors does the Kemanggisan campus have")
+
+    def test_does_not_fire_on_a_non_enumeration_question(self):
+        assert not is_campus_programs_query("berapa biaya kuliah di binus kemanggisan")
+        assert not is_campus_programs_query("where is the Alam Sutera campus")
+
+
+class TestResolveNamedCampus:
+    _KNOWN = {"Alam Sutera", "ASO", "Bandung", "Bekasi", "Kemanggisan", "Malang",
+              "Medan", "Online Learning", "Semarang", "Senayan"}
+
+    def test_resolves_an_alias_to_its_canonical_campus(self):
+        assert resolve_named_campus("program apa saja di binus anggrek", self._KNOWN) == "Kemanggisan"
+        assert resolve_named_campus("jurusan di kampus kijang", self._KNOWN) == "Kemanggisan"
+        assert resolve_named_campus("jurusan di alsut", self._KNOWN) == "Alam Sutera"
+
+    def test_resolves_a_directly_named_campus(self):
+        assert resolve_named_campus("program di binus bandung", self._KNOWN) == "Bandung"
+        assert resolve_named_campus("jurusan di binus alam sutera", self._KNOWN) == "Alam Sutera"
+
+    def test_none_when_no_campus_named(self):
+        assert resolve_named_campus("what programs does BINUS offer", self._KNOWN) is None
+        assert resolve_named_campus("program studi Ilmu Komputer", self._KNOWN) is None
+
+
+class TestCampusAliasNote:
+    """The generation-side companion to normalize_campus_aliases: since the alias is rewritten
+    for RETRIEVAL only, the model reads context under the canonical campus name while the
+    question still says the alias, and declines. campus_alias_note bridges that gap. Confirmed
+    live: "program apa saja di binus anggrek" retrieved Kemanggisan's programs at 0.927 yet
+    still fell back."""
+
+    def test_fires_for_a_name_substitution_alias(self):
+        note = campus_alias_note("program apa saja di binus anggrek")
+        assert note is not None
+        assert "Anggrek" in note and "Kemanggisan" in note
+
+    def test_fires_for_alsut(self):
+        note = campus_alias_note("jurusan di alsut")
+        assert note is not None and "Alam Sutera" in note
+
+    def test_case_insensitive(self):
+        assert campus_alias_note("KAMPUS ANGGREK") is not None
+
+    def test_none_when_no_alias_present(self):
+        assert campus_alias_note("program di binus medan") is None
+        assert campus_alias_note("what programs are at BINUS Kemanggisan") is None
+
+    def test_multiple_aliases_are_all_listed(self):
+        note = campus_alias_note("bandingkan anggrek dan alsut")
+        assert note is not None
+        assert "Kemanggisan" in note and "Alam Sutera" in note
 
 
 # The 10 real BINUS campus names (as ingestion.known_campus_names derives them) -- used

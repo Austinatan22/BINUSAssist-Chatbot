@@ -39,11 +39,13 @@ from backend.rag.generation import (
     detect_named_programs,
     detect_unresolved_campus_mention,
     detect_unresolved_program_mention,
+    is_campus_programs_query,
     is_leadership_query,
     is_prompt_extraction_attempt,
     is_smalltalk,
     is_who_teaches_query,
     normalize_campus_aliases,
+    resolve_named_campus,
     rank_clarification_suggestions,
     rewrite_query,
     strip_retrieval_filler,
@@ -55,7 +57,12 @@ from backend.rag.generation import (
     stream_smalltalk_reply,
     suggest_follow_ups,
 )
-from backend.rag.ingestion import FACULTY_ROSTER_URL, known_campus_names, load_scraped_urls
+from backend.rag.ingestion import (
+    admission_requirement_url_for_campus,
+    FACULTY_ROSTER_URL,
+    known_campus_names,
+    load_scraped_urls,
+)
 from backend.rag.retrieval import (
     get_program_catalog,
     retrieve_and_rerank,
@@ -105,6 +112,13 @@ class Plan:
     # clarifying question instead of a silent fallback (see _route_retrieval's tail).
     unresolved_campus_mention: str | None = None
     unresolved_program_mention: str | None = None
+    # Overrides the raw user message as the question shown to the model at generation, for the
+    # one case where the message names something by an alias the retrieved context never uses
+    # verbatim: the campus-programs route resolves e.g. "anggrek" -> Kemanggisan and scopes to
+    # Kemanggisan's program list, but the model, still seeing "anggrek", declines because the
+    # word isn't in the context. A prompt-side note alone did NOT move gpt-4o-mini here; giving
+    # it the canonical name (the deterministic fix) does. None -> generation uses the message.
+    generation_query: str | None = None
     # Semantic-cache bookkeeping -- non-None only for a fresh (no-history) turn with an
     # index loaded, i.e. the states where caching applies.
     cache_embedding: object | None = None
@@ -240,7 +254,7 @@ class ChatService:
                 else []
             )
             answer_stream = stream_answer(
-                message, plan.nodes, history=history,
+                plan.generation_query or message, plan.nodes, history=history,
                 is_comparison=plan.is_comparison, follow_ups=follow_ups,
             )
             if plan.cache_embedding is not None:
@@ -347,6 +361,33 @@ class ChatService:
         if plan.who_teaches or plan.leadership:
             await self._route_faculty(plan)
             return
+
+        # "What programs are offered at campus X" -> scope to that campus's admission-
+        # requirement page (the only source that lists them). Open retrieval otherwise lets a
+        # faculty bio outrank the program list, and the model declines on the faculty-dominated
+        # context -- confirmed live for "anggrek" (alias -> Kemanggisan) and "kemanggisan".
+        # Gated on BOTH the enumeration intent AND a resolvable campus, so a program-named
+        # ("...di Computer Science") or campus-less ("what programs does BINUS offer") query
+        # falls through to normal routing untouched.
+        if is_campus_programs_query(plan.standalone_query):
+            campus = resolve_named_campus(plan.standalone_query, known_campus_names())
+            campus_url = admission_requirement_url_for_campus(campus) if campus else None
+            if campus_url:
+                # retrieval_query, not standalone_query: it's alias-normalized (anggrek ->
+                # Kemanggisan), so the reranker scores the campus's program-list nodes against
+                # the campus's real name -- with the raw "anggrek" they fell below the gate and
+                # dead-ended even though the right page was scoped in.
+                nodes = await retrieve_for_named_programs(
+                    self._index, self._reranker, retrieval_query, [campus_url],
+                    per_program_top_n=6,
+                )
+                plan.nodes = nodes if (nodes and nodes[0].score >= gate) else []
+                if plan.nodes:
+                    # Show the model the campus's canonical name so it doesn't decline on an
+                    # alias absent from the context (e.g. "anggrek"). Normalizes only the
+                    # campus alias; the rest of the user's wording/language is preserved.
+                    plan.generation_query = normalize_campus_aliases(plan.standalone_query)
+                return
 
         matched = program_match.matched
         named_unmatched = program_match.named_unmatched

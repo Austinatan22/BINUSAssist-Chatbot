@@ -395,6 +395,10 @@ def add_document(path: Path, converter: Optional[DocumentConverter] = None) -> l
                 "parent_text": careers,
                 "section_title": "Prospective Career of the Graduates",
             }))
+        # One self-describing node per course row so per-course SCU lookups retrieve the course
+        # and its credit value together (see _course_scu_row_nodes). A no-op for a document with
+        # no Course-Name/SCU table.
+        nodes.extend(_course_scu_row_nodes(path, full_text))
 
     logger.info("  -> %d chunk(s) from %d section(s)", len(nodes), len(sections) or 1)
     return nodes
@@ -552,6 +556,25 @@ def known_campus_names() -> set[str]:
     return names
 
 
+def admission_requirement_url_for_campus(campus_name: str) -> Optional[str]:
+    """The scraped admission-requirement page for a canonical campus name (as
+    known_campus_names yields it, e.g. "Kemanggisan"), or None if that campus has no such
+    page scraped. Reverses the same slug->name derivation known_campus_names uses -- read
+    from the URLs, no hardcoded campus->URL table -- so it stays correct as campuses are
+    added/removed at the source. Used to scope a "what programs are offered at campus X"
+    query to the one page that actually lists them (see chat_service's campus-programs route)."""
+    for url in load_scraped_urls():
+        if "admission-requirement" not in url:
+            continue
+        match = _CAMPUS_LOCATION_RE.search(url)
+        if not match:
+            continue
+        slug = re.sub(r"^binus-", "", match.group(1))
+        if _CAMPUS_LABEL_OVERRIDES.get(slug, slug.replace("-", " ").title()) == campus_name:
+            return url
+    return None
+
+
 def _tuition_fee_row_nodes(url: str, text: str) -> list[TextNode]:
     """Splits every data row of a BINUS tuition-fee page's markdown table(s) into its
     own small chunk: one program, one campus, one academic year per chunk. Applied to
@@ -611,6 +634,91 @@ def _tuition_fee_row_nodes(url: str, text: str) -> list[TextNode]:
                 "ingested_at": ingested_at,
                 "parent_text": node_text,
                 "section_title": f"{program} -- {campus}{year_suffix}",
+            },
+        ))
+    return nodes
+
+
+# The catalog PDFs' course-structure tables ("| Sem | Code | Course Name | SCU | Total |") are
+# large enough that _parent_child_split routinely lands a course's row and the "| SCU |" column
+# header in DIFFERENT chunks -- so a per-course credit lookup ("berapa sks Computer Graphics")
+# retrieves either a bare "| Computer Graphics | 2/2 |" with no way to tell the number is an SCU
+# count, or misses the row entirely (confirmed via retrieval diagnostic: the Computer Graphics
+# row's only parent scored 0.045 and carried no SCU header). This mirrors _tuition_fee_row_nodes:
+# split every course row into its own small, self-describing node -- "<Program> program --
+# <Course>: <SCU> SCU (Semester N)" -- read straight from the raw docling markdown BEFORE
+# _parent_child_split, so a course and its credits are never separated. The chunked table nodes
+# still exist for broad "what's the curriculum" queries; these are additive, for point lookups.
+_COURSE_SCU_RE = re.compile(r"^\d+(?:/\d+)?$")  # "2", "4", "4/2", "2/1" -- lecture[/lab] SCU
+_COURSE_NAME_NOISE_RE = re.compile(r"\s*\((?:AOL|Block)\)|\*+", re.IGNORECASE)
+_PROGRAM_YEAR_SUFFIX_RE = re.compile(r"_\d{4}$")  # same convention as retrieval.get_program_catalog
+
+
+def _course_scu_row_nodes(path: Path, text: str) -> list[TextNode]:
+    """One node per course in a catalog PDF's course-structure table(s), with the course's SCU
+    (Semester Credit Unit) value inline -- see the block comment above for why the normal
+    chunking can't answer a per-course credit question. A no-op for a document with no
+    Course-Name/SCU table (the header gate below never opens), so it's safe to run on every
+    PDF/DOCX. The Sem column is carried forward across rows that leave it blank (docling only
+    fills it on a semester group's first row); a row whose SCU cell isn't a credit token
+    (blank, "Streaming: ...", a stray merged cell) is skipped rather than guessed at."""
+    program = re.sub(r"\s+", " ", _PROGRAM_YEAR_SUFFIX_RE.sub("", path.stem).replace("_", " ")).strip()
+    ingested_at = datetime.now(timezone.utc).isoformat()
+    lines = text.splitlines()
+    header_cells: Optional[list[str]] = None
+    name_idx = scu_idx = sem_idx = None
+    current_sem = ""
+    seen: set[tuple] = set()
+    nodes: list[TextNode] = []
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if _TABLE_SEPARATOR_RE.match(stripped):
+            continue
+        row_match = _TABLE_ROW_RE.match(stripped)
+        if not row_match:
+            if stripped:
+                header_cells = None  # a non-table line ends the current table
+            continue
+        cells = [c.strip() for c in row_match.group(1).split("|")]
+
+        # A header row is recognized only when the NEXT line is the "|---|" separator AND it
+        # carries the Course-Name + SCU columns this parser is scoped to -- so an unrelated
+        # table on the page (minor/elective lists, enrichment tracks) is ignored.
+        next_line = lines[i + 1].strip() if i + 1 < len(lines) else ""
+        if _TABLE_SEPARATOR_RE.match(next_line):
+            lowered = [c.lower() for c in cells]
+            if "course name" in lowered and "scu" in lowered:
+                header_cells = cells
+                name_idx = lowered.index("course name")
+                scu_idx = lowered.index("scu")
+                sem_idx = lowered.index("sem") if "sem" in lowered else None
+                current_sem = ""
+            else:
+                header_cells = None
+            continue
+
+        if not header_cells or len(cells) != len(header_cells):
+            continue
+        if sem_idx is not None and cells[sem_idx]:
+            current_sem = cells[sem_idx]
+        course = _COURSE_NAME_NOISE_RE.sub("", cells[name_idx]).strip()
+        scu = cells[scu_idx]
+        if not course or not _COURSE_SCU_RE.match(scu):
+            continue
+        key = (course.lower(), scu, current_sem)
+        if key in seen:  # docling occasionally repeats a row; one node per (course, scu, sem)
+            continue
+        seen.add(key)
+        sem_suffix = f" (Semester {current_sem})" if current_sem else ""
+        node_text = f"{program} program -- {course}: {scu} SCU{sem_suffix}"
+        nodes.append(TextNode(
+            text=node_text,
+            metadata={
+                "source_file": path.name,
+                "ingested_at": ingested_at,
+                "parent_text": node_text,
+                "section_title": f"{course} -- {program} Course Structure",
             },
         ))
     return nodes
@@ -1198,9 +1306,13 @@ def delete_document_nodes(index: VectorStoreIndex, filename: str) -> int:
     if node_ids:
         collection.delete(ids=node_ids)
         for node_id in node_ids:
+            # A node present in the Chroma collection but absent from the docstore (the two
+            # can drift -- Chroma writes are immediate, the docstore is persisted separately)
+            # must not abort the delete: this llama-index docstore raises ValueError, not
+            # KeyError, for a missing doc_id, so both are treated as "already gone".
             try:
                 index.docstore.delete_document(node_id)
-            except KeyError:
+            except (KeyError, ValueError):
                 pass
 
     return len(node_ids)
