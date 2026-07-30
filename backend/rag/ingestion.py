@@ -172,6 +172,47 @@ def _recover_dropped_credit_total(path: Path, docling_text: str) -> Optional[str
     return recovered
 
 
+# The base Computer Science catalog PDF renders its "Prospective Career of the Graduates"
+# list as an IMAGE, so docling extracts only the lead-in followed by "<!-- image -->" and
+# the roles are lost -- a faithful model can then only decline the career question (the 8B
+# masked this by fabricating a plausible list). OCR recovers it from a clean copy of the
+# same PDF but not from the live re-export (its image is OCR-hostile), so this is the
+# authentic list, OCR-recovered once and pinned here. Same deterministic-recovery spirit as
+# _recover_dropped_credit_total: injected ONLY when the section is present but its list
+# isn't, so a future PDF that carries the list as real text (or a successful OCR) is a
+# no-op with no duplication.
+_CS_CAREER_ROLES = (
+    "Software Engineer/Developer", "System Analyst/Developer", "Web Engineer/Developer",
+    "Computer Network Specialist", "Database Specialist", "Artificial Intelligence Specialist",
+    "Data Scientist", "IT Support/Consultant", "Researcher", "Multimedia Programmer",
+    "Lecturer/Trainer",
+)
+# Ties the fix to the Computer Science program AND the image-only case: the roles image sits
+# right after this exact lead-in. A text-list version wouldn't have the image placeholder
+# here, so the guard naturally stops firing once the source carries the list as text.
+_CS_CAREER_IMAGE_RE = re.compile(
+    r"computer science program could follow a career as:\s*(?:<!--\s*image\s*-->)",
+    re.IGNORECASE,
+)
+
+
+def _recover_career_list(path: Path, docling_text: str) -> Optional[str]:
+    """The Computer Science careers list when the PDF stored it as an (un-extractable) image;
+    else None. See _CS_CAREER_ROLES. A no-op for every other document and for any future
+    version whose careers section is real text."""
+    if path.suffix.lower() != ".pdf":
+        return None
+    if not _CS_CAREER_IMAGE_RE.search(docling_text):
+        return None
+    roles = "\n".join(f"- {r}" for r in _CS_CAREER_ROLES)
+    recovered = (
+        "Prospective Career of the Graduates (Computer Science): after finishing the "
+        "program, graduates of the Computer Science Program could follow a career as:\n" + roles
+    )
+    logger.info("Recovered image-only career list for %s (%d roles)", path.name, len(_CS_CAREER_ROLES))
+    return recovered
+
+
 _HEADER_RE = re.compile(r"^#{1,6}\s+(.*)$", re.MULTILINE)
 
 
@@ -336,13 +377,23 @@ def add_document(path: Path, converter: Optional[DocumentConverter] = None) -> l
     # (see _recover_dropped_credit_total). Only fires for a PDF whose docling output
     # genuinely lacks it, so it's a no-op for every document already indexed correctly.
     if suffix in _DOCLING_EXTENSIONS:
-        recovered = _recover_dropped_credit_total(path, "\n".join(t for _, t in sections))
+        full_text = "\n".join(t for _, t in sections)
+        recovered = _recover_dropped_credit_total(path, full_text)
         if recovered:
             nodes.append(TextNode(text=recovered, metadata={
                 "source_file": path.name,
                 "ingested_at": ingested_at,
                 "parent_text": recovered,
                 "section_title": "Total Credits",
+            }))
+        # Same backstop shape for the Computer Science careers list stored as an image.
+        careers = _recover_career_list(path, full_text)
+        if careers:
+            nodes.append(TextNode(text=careers, metadata={
+                "source_file": path.name,
+                "ingested_at": ingested_at,
+                "parent_text": careers,
+                "section_title": "Prospective Career of the Graduates",
             }))
 
     logger.info("  -> %d chunk(s) from %d section(s)", len(nodes), len(sections) or 1)

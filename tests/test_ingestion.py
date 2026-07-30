@@ -28,6 +28,8 @@ from backend.rag.ingestion import (
     _nearest_header,
     _parent_child_split,
     _recover_dropped_credit_total,
+    _recover_career_list,
+    _CS_CAREER_ROLES,
     _scrub_injection_attempts,
     _section_headers,
     _cache_url_nodes,
@@ -91,6 +93,41 @@ class TestRecoverDroppedCreditTotal:
     def test_recovered_string_is_long_enough_to_survive_chunk_filters(self, tmp_path):
         # the <10-char / <20-char child-chunk drop filters must not eat the recovered fact
         assert len("Total Credits: 146 Credits") >= 20
+
+
+class TestRecoverCareerList:
+    """Backstop for the base Computer Science PDF storing its career list as an image
+    (docling extracts only the lead-in + '<!-- image -->'). Injects the real list only in
+    that image-only case, and is a strict no-op once the source carries the list as text."""
+
+    IMAGE_ONLY = ("## Prospective Career of the Graduates\n\nAfter finishing the program, the "
+                  "graduate of the Computer Science Program could follow a career as:\n\n"
+                  "<!-- image -->\n\n## Curriculum\n")
+
+    def test_recovers_the_full_list_when_section_is_image_only(self, tmp_path):
+        p = tmp_path / "Computer_Science_2026.pdf"
+        out = _recover_career_list(p, self.IMAGE_ONLY)
+        assert out is not None
+        for role in _CS_CAREER_ROLES:
+            assert role in out
+        assert len(_CS_CAREER_ROLES) == 11
+
+    def test_no_op_when_list_is_already_text(self, tmp_path):
+        # A version whose careers are real text (no image placeholder after the lead-in) ->
+        # nothing injected, so no duplication.
+        p = tmp_path / "Computer_Science_2026.pdf"
+        text = ("the Computer Science Program could follow a career as:\n\n"
+                "1. Software Engineer\n2. Data Scientist\n")
+        assert _recover_career_list(p, text) is None
+
+    def test_no_op_for_other_programs(self, tmp_path):
+        p = tmp_path / "Cyber_Security_2025.pdf"
+        text = "the Cyber Security Program could follow a career as:\n\n<!-- image -->"
+        assert _recover_career_list(p, text) is None  # lead-in names a different program
+
+    def test_non_pdf_ignored(self, tmp_path):
+        p = tmp_path / "x.docx"
+        assert _recover_career_list(p, self.IMAGE_ONLY) is None
 
 
 class TestIsCrossProgramPartnerTable:
