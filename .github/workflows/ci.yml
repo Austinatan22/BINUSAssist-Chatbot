@@ -17,14 +17,22 @@ jobs:
           cache: "pip"
           cache-dependency-path: requirements.txt
 
-      # CPU wheel, not the CUDA build from README's setup instructions -- GitHub-hosted
+      # CPU wheels, not the CUDA build from README's setup instructions -- GitHub-hosted
       # runners have no GPU, and the unit suite (tests/) never executes a model, only the
       # pure/deterministic helpers around retrieval, chunking, and caching. torch is still
       # a real transitive import (docling depends on it even with do_ocr disabled), so it
       # has to be installed for backend modules to import at all.
+      #
+      # torchvision must come from the SAME index as torch, and be installed here rather
+      # than left to requirements.txt: it ships a compiled extension linked against one
+      # specific torch build, and requirements.txt pulls it in transitively (docling ->
+      # transformers) from PyPI, where the wheel is built against the default CUDA torch.
+      # Paired with a +cpu torch its ops never register, and the suite dies at collection
+      # with "RuntimeError: operator torchvision::nms does not exist" -- which transformers
+      # then re-raises as the misleading "Could not import module 'AutoProcessor'".
       - name: Install backend dependencies
         run: |
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
 
       # Runs the unit suite AND the labeled regression eval (tests/test_regression.py):
