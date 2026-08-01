@@ -1633,8 +1633,14 @@ _SENTINEL_PROBE_CHARS = 24
 # the real (sentinel-stripped) content so far is still only a stub (<= _SENTINEL_STUB_MAX_
 # CHARS), the whole turn becomes a clean fallback instead of shipping the dangling
 # half-answer. A genuine substantial answer that reaches the cap without a sentinel streams
-# normally (first token delayed by only the extra buffered chars, ~0.3-0.5s).
-_SENTINEL_DECISION_CHARS = 200
+# normally (first token delayed by only the extra buffered chars).
+# Set to _SENTINEL_PROBE_CHARS rather than lower: the peek loop checks the sentinel regex
+# before the length cap each iteration, so the cap must stay >= the longest a wrapped
+# sentinel ("**NO_ANSWER.", quoted, etc.) can be, or a truncated match is missed entirely.
+# Below _SENTINEL_STUB_MAX_CHARS this only still catches a bail after a SHORT stub (<=~24
+# chars of real content) -- a longer stub-then-bail streams through uncaught. Traded
+# deliberately for lower first-token latency.
+_SENTINEL_DECISION_CHARS = _SENTINEL_PROBE_CHARS
 _SENTINEL_STUB_MAX_CHARS = 160
 
 
