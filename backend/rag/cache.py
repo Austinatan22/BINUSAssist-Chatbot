@@ -51,7 +51,14 @@ _cache: list[dict] = []
 _ASPECT_KEYWORDS = {
     "career": ["career", "job", "prospect", "karir", "kerja", "peluang", "profesi"],
     "curriculum": ["curriculum", "course", "subject", "kurikulum", "mata kuliah", "mata pelajaran"],
-    "tuition": ["tuition", "fee", "cost", "price", "biaya", "spp", "uang kuliah"],
+    # "harga"/"bayar" are the everyday Indonesian words a prospective student actually
+    # types ("berapa harga jurusan X"); without them detect_aspects returned an empty set
+    # for a plainly-tuition question, which both skipped the campus-balanced tuition retry
+    # (chat_service._retry_with_supplementary_sources gates on "tuition" in plan.aspects)
+    # and made every such question un-cacheable via the aspect gate.
+    "tuition": [
+        "tuition", "fee", "cost", "price", "biaya", "spp", "uang kuliah", "harga", "bayar",
+    ],
     "admission": ["admission", "apply", "application", "requirement", "pendaftaran", "syarat", "masuk"],
     "outcome": ["outcome", "competenc", "capaian", "kompetensi"],
     "scholarship": ["scholarship", "beasiswa"],

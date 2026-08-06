@@ -1587,6 +1587,43 @@ class TestRewriteQueryCrossLingual:
         assert out.count("career prospects for Computer Science graduates") == 1
 
 
+class TestRewritePromptAsksForSpellingCorrection:
+    """A misspelling is what puts a query on the rewrite path at all -- the cross-encoder
+    collapses on the out-of-vocabulary subword split a typo produces (measured: 0.709 vs
+    0.119 against the SAME chunks for "jurusan" vs "jurusna"). Recovery used to rest on the
+    model incidentally normalizing the typo while paraphrasing, which nothing asked it to
+    do; only the Indonesian branch had a real backstop, and only as a side effect of
+    translating. These assert the instruction is actually in the prompt, since dropping it
+    would regress typo tolerance silently -- every test above mocks the LLM, so none of
+    them would notice."""
+
+    def test_prompt_asks_to_correct_misspellings(self):
+        from backend.rag.prompts import rewrite_system_prompt
+
+        prompt = rewrite_system_prompt(3).lower()
+        assert "typo" in prompt or "misspell" in prompt
+        assert "correct" in prompt
+
+    def test_prompt_still_forbids_swapping_in_a_different_program(self):
+        # rewrite_query has no deterministic program-substitution guard of its own (unlike
+        # condense_question, which skips the rewrite entirely when the question already
+        # names a program). Telling the model to "correct" wording is exactly the kind of
+        # licence that could drift "Computer Science" into "Computer Science Global Class"
+        # -- the substitution already found live on the condense path -- so the narrowing
+        # instruction has to travel with it.
+        from backend.rag.prompts import rewrite_system_prompt
+
+        prompt = rewrite_system_prompt(3).lower()
+        assert "do not change what is being asked" in prompt
+        assert "more specific program" in prompt
+
+    def test_english_translation_requirement_survives(self):
+        # The cross-lingual clause predates this and is load-bearing (see the class above).
+        from backend.rag.prompts import rewrite_system_prompt
+
+        assert "english translation" in rewrite_system_prompt(3).lower()
+
+
 class TestContextualFallback:
     """When a question is unanswerable but still about BINUS, the fallback should acknowledge
     the topic instead of always repeating the canned line. A strictly-unrelated question (or a

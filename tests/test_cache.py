@@ -32,6 +32,18 @@ class TestDetectAspects:
     def test_tuition_keyword_indonesian(self):
         assert "tuition" in detect_aspects("Berapa biaya kuliah Computer Science?")
 
+    @pytest.mark.parametrize("query", [
+        "berapa harga jurusan computer science?",
+        "berapa bayar kuliah di Computer Science?",
+    ])
+    def test_colloquial_indonesian_price_words_are_tuition(self, query):
+        # "biaya"/"uang kuliah" is the formal register; "harga"/"bayar" is what students
+        # actually type. Found live in query_log.jsonl -- a plainly-tuition question tagged
+        # as ambiguous, which skipped the campus-balanced tuition retry
+        # (chat_service._retry_with_supplementary_sources gates on this tag) and returned
+        # an unbalanced subset of campuses.
+        assert "tuition" in detect_aspects(query)
+
     def test_ambiguous_query_returns_empty_set(self):
         # Empty means "ambiguous" to the caller, never a wildcard match.
         assert detect_aspects("Tell me more about it") == set()

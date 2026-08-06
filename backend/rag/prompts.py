@@ -244,6 +244,16 @@ TRANSLATE_TO_ENGLISH_SYSTEM_PROMPT = (
 
 
 def rewrite_system_prompt(n: int) -> str:
+    # The spelling clause makes typo repair DELIBERATE. It already happened by accident --
+    # the Indonesian branch's guaranteed English translation (_translate_query_to_english)
+    # reads through a misspelling as a side effect of translating -- but nothing asked for
+    # it, so an English-language typo had no such backstop and recovery rested on the
+    # model incidentally normalizing it. Worth doing here specifically because a
+    # misspelling is what puts a query on this path: the cross-encoder collapses on the
+    # out-of-vocabulary subword split a typo produces (measured, bge-reranker-v2-m3:
+    # "berapa harga jurusan computer science?" 0.709 vs "...jurusna..." 0.119 against the
+    # SAME chunks -- retrieval had the right content in the pool both times). Costs no
+    # extra call; this rewrite already runs on every below-gate query.
     return (
         "You expand search queries for a university program-guide knowledge base "
         "(course catalogs, curriculum tables, program/major descriptions). These "
@@ -251,7 +261,13 @@ def rewrite_system_prompt(n: int) -> str:
         "'minor program', 'Area of Learning (AOL)', and 'course structure' rather "
         "than everyday phrasing. Given a user's question, write "
         f"{n} alternative search queries more likely to match that document "
-        "vocabulary. If the user's question is written in Indonesian, at least one "
+        "vocabulary. The question may contain typos or informal abbreviations -- "
+        "correct any obvious misspelling to the word the user clearly meant (e.g. "
+        "Indonesian 'jurusna' -> 'jurusan', 'harag' -> 'harga'; English 'curriculm' "
+        "-> 'curriculum'), and make sure every alternative you write is correctly "
+        "spelled. Do NOT change what is being asked, and do NOT swap in a different, "
+        "more specific program than the one named. If the user's question is written "
+        "in Indonesian, at least one "
         "of the alternatives MUST be an English translation of it -- the program "
         "catalogs themselves are written in English, so an Indonesian rephrasing "
         "alone (e.g. 'capaian pembelajaran' reworded as 'tujuan akhir') will not "

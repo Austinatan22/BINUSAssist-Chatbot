@@ -406,6 +406,7 @@ class ChatService:
             # Vocabulary-mismatch retry (R-08), same reasoning as the single-match branch
             # below -- a program-scoped comparison can suffer the identical failure (e.g.
             # comparing in Indonesian against English-only catalogs).
+            extra_queries: list[str] = []
             if (not nodes or nodes[0].score < gate) and not is_budget_exceeded():
                 extra_queries = await rewrite_query(attribute_query)
                 if extra_queries:
@@ -414,7 +415,7 @@ class ChatService:
                         balanced=True, extra_queries=extra_queries,
                     )
             nodes = await self._retry_with_supplementary_sources(
-                plan, attribute_query, nodes, source_files
+                plan, attribute_query, nodes, source_files, extra_queries
             )
             if not nodes or nodes[0].score < gate:
                 nodes, plan.is_comparison = [], False
@@ -439,6 +440,7 @@ class ChatService:
             # PDF even though the same-topic ENGLISH question scored 0.997 against the
             # identical document. Skipped once the token budget is spent, same as the open
             # path, since generation is about to be declined anyway in that case.
+            extra_queries: list[str] = []
             if (not nodes or nodes[0].score < gate) and not is_budget_exceeded():
                 extra_queries = await rewrite_query(retrieval_query)
                 if extra_queries:
@@ -447,7 +449,7 @@ class ChatService:
                         extra_queries=extra_queries,
                     )
             nodes = await self._retry_with_supplementary_sources(
-                plan, retrieval_query, nodes, source_files
+                plan, retrieval_query, nodes, source_files, extra_queries
             )
             plan.nodes = nodes if (nodes and nodes[0].score >= gate) else []
         elif named_unmatched:
@@ -517,11 +519,27 @@ class ChatService:
         nodes = nodes if (nodes and nodes[0].score >= _WHO_TEACHES_GATE) else []
         plan.nodes = nodes[:_WHO_TEACHES_MAX_LECTURERS] if plan.who_teaches else nodes
 
-    async def _retry_with_supplementary_sources(self, plan, standalone_query, nodes, source_files):
+    async def _retry_with_supplementary_sources(
+        self, plan, standalone_query, nodes, source_files, extra_queries=None
+    ):
         """A named program's own catalog has no tuition/admission-fee content -- that
         lives in separately-scraped reference pages. When program-scoped retrieval comes
         up empty/low-confidence, retry with every scraped URL added, but only on that
-        already-failing path so the common case pays no extra cost."""
+        already-failing path so the common case pays no extra cost.
+
+        `extra_queries` are the paraphrases the caller's own rewrite retry (R-08) already
+        paid for -- they are forwarded here rather than dropped, because the caller spent
+        them against the program's CATALOG, which is exactly the document that cannot
+        answer the questions that reach this retry. Confirmed live from query_log.jsonl:
+        "berapa harga jurusna computer science?" (a one-character transposition of
+        "jurusan") reranked 0.119 against the tuition pages and fell back, while the
+        correctly-spelled question scored 0.709 -- the right chunks were in the candidate
+        pool both times, the cross-encoder just collapses on an out-of-vocabulary subword
+        split. The catalog leg of that same request scored 0.004 even spelled correctly
+        (tuition simply isn't in it), so the entire rewrite budget was being spent where it
+        could never help. Forwarding the paraphrases here takes those same typo'd queries
+        to 0.980. No extra LLM call -- the rewrite already happened.
+        """
         if nodes and nodes[0].score >= settings.confidence_threshold:
             return nodes
         supplementary = load_scraped_urls()
@@ -534,7 +552,9 @@ class ChatService:
         # applying it there could silently collapse a program-vs-program comparison
         # into one program's own campus breakdown.
         if "tuition" in plan.aspects and len(source_files) == 1:
-            campus_nodes = await self._retry_tuition_across_campuses(standalone_query, supplementary)
+            campus_nodes = await self._retry_tuition_across_campuses(
+                standalone_query, supplementary, extra_queries
+            )
             if campus_nodes and campus_nodes[0].score >= settings.confidence_threshold:
                 # Multiple campuses of the SAME program is structurally identical to
                 # comparing multiple programs (one column per item, one row per metric)
@@ -544,10 +564,13 @@ class ChatService:
                 return campus_nodes
 
         return await retrieve_for_named_programs(
-            self._index, self._reranker, standalone_query, source_files + supplementary
+            self._index, self._reranker, standalone_query, source_files + supplementary,
+            extra_queries=extra_queries,
         )
 
-    async def _retry_tuition_across_campuses(self, standalone_query, supplementary):
+    async def _retry_tuition_across_campuses(
+        self, standalone_query, supplementary, extra_queries=None
+    ):
         """BINUS publishes tuition/fees as one page PER CAMPUS -- the generic
         supplementary-source retry above pools all of them (plus every other scraped
         page) into one unbalanced global top-N, so 1-2 campuses that happen to rerank
@@ -564,7 +587,7 @@ class ChatService:
             return []
         return await retrieve_for_named_programs(
             self._index, self._reranker, standalone_query, campus_urls,
-            balanced=True, per_program_top_n=2, max_nodes=16,
+            balanced=True, per_program_top_n=2, max_nodes=16, extra_queries=extra_queries,
         )
 
     async def _log_after_stream(self, stream, entry: dict, start_time: float):

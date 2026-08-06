@@ -176,6 +176,102 @@ class TestRetryTuitionAcrossCampuses:
         source_files_arg = mock_retrieve.call_args.args[3]
         assert sorted(source_files_arg) == sorted(scraped[:2])
 
+    def test_forwards_paraphrases_to_the_campus_balanced_retrieval(self, monkeypatch):
+        service = _service()
+        scraped = ["https://gabung.binus.ac.id/tuition-fee/?campus-location=binus-medan"]
+        mock_retrieve = AsyncMock(return_value=[_fake_node(0.9)])
+        monkeypatch.setattr(chat_service, "retrieve_for_named_programs", mock_retrieve)
+
+        asyncio.run(service._retry_tuition_across_campuses(
+            "berapa harga jurusna computer science?", scraped, ["biaya kuliah Computer Science"]
+        ))
+
+        assert mock_retrieve.call_args.kwargs["extra_queries"] == [
+            "biaya kuliah Computer Science"
+        ]
+
+
+class TestParaphrasesReachTheSupplementaryRetry:
+    """The caller's rewrite retry (R-08) pays for paraphrases against the program's own
+    CATALOG -- the one document that cannot answer a tuition question (measured 0.004 even
+    when spelled correctly). Dropping them before the supplementary retry meant a typo'd
+    query only ever hit the tuition pages in its misspelled form: "berapa harga jurusna
+    computer science?" reranked 0.119 and fell back where the correct spelling scored
+    0.709. Forwarding the same paraphrases takes it to 0.980, with no extra LLM call."""
+
+    def test_generic_retry_receives_the_paraphrases(self, monkeypatch):
+        service = _service()
+        monkeypatch.setattr(chat_service, "load_scraped_urls", lambda: ["https://example.com/a"])
+        mock_retrieve = AsyncMock(return_value=[_fake_node(0.8)])
+        monkeypatch.setattr(chat_service, "retrieve_for_named_programs", mock_retrieve)
+
+        asyncio.run(service._retry_with_supplementary_sources(
+            _plan(aspects={"career"}), "q", [], ["cs.pdf"], ["rewritten q"],
+        ))
+
+        assert mock_retrieve.call_args.kwargs["extra_queries"] == ["rewritten q"]
+
+    def test_campus_balanced_retry_receives_the_paraphrases(self, monkeypatch):
+        service = _service()
+        monkeypatch.setattr(chat_service, "load_scraped_urls", lambda: [
+            "https://gabung.binus.ac.id/tuition-fee/?campus-location=binus-medan",
+        ])
+        mock_retrieve = AsyncMock(return_value=[_fake_node(0.95)])
+        monkeypatch.setattr(chat_service, "retrieve_for_named_programs", mock_retrieve)
+
+        asyncio.run(service._retry_with_supplementary_sources(
+            _plan(aspects={"tuition"}), "berapa harga jurusna computer science?", [],
+            ["cs.pdf"], ["biaya kuliah Computer Science"],
+        ))
+
+        assert mock_retrieve.call_args.kwargs["extra_queries"] == [
+            "biaya kuliah Computer Science"
+        ]
+
+    def test_omitted_paraphrases_still_work(self, monkeypatch):
+        # extra_queries defaults to None -- the parameter is optional, and every existing
+        # caller that doesn't have paraphrases to give must keep working unchanged.
+        service = _service()
+        monkeypatch.setattr(chat_service, "load_scraped_urls", lambda: ["https://example.com/a"])
+        mock_retrieve = AsyncMock(return_value=[_fake_node(0.8)])
+        monkeypatch.setattr(chat_service, "retrieve_for_named_programs", mock_retrieve)
+
+        asyncio.run(service._retry_with_supplementary_sources(
+            _plan(aspects={"career"}), "q", [], ["cs.pdf"],
+        ))
+
+        assert mock_retrieve.call_args.kwargs["extra_queries"] is None
+
+    @pytest.mark.parametrize("branch_programs", [["Computer Science"], ["Computer Science", "Data Science"]])
+    def test_route_retrieval_hands_its_rewrite_down_to_the_supplementary_retry(
+        self, monkeypatch, branch_programs
+    ):
+        # End-to-end through _route_retrieval for BOTH program-scoped branches: the
+        # rewrite fires once (scoped retrieval is below the gate) and the SAME paraphrases
+        # must arrive at the supplementary retry rather than being recomputed or dropped.
+        monkeypatch.setattr(chat_service, "is_budget_exceeded", lambda: False)
+        mock_rewrite = AsyncMock(return_value=["biaya kuliah Computer Science"])
+        monkeypatch.setattr(chat_service, "rewrite_query", mock_rewrite)
+        monkeypatch.setattr(
+            chat_service, "retrieve_for_named_programs", AsyncMock(return_value=[_fake_node(0.1)])
+        )
+        mock_supp = AsyncMock(return_value=[_fake_node(0.98)])
+        monkeypatch.setattr(ChatService, "_retry_with_supplementary_sources", mock_supp)
+
+        service = _service()
+        plan = Plan(
+            standalone_query="berapa harga jurusna computer science?", program_names=_CATALOG,
+        )
+        program_match = SimpleNamespace(matched=branch_programs, named_unmatched=False)
+        catalog = {"Computer Science": "cs.pdf", "Data Science": "ds.pdf"}
+        asyncio.run(service._route_retrieval(
+            plan, program_match, catalog, [], "berapa harga jurusna computer science?",
+        ))
+
+        mock_rewrite.assert_awaited_once()  # not paid for twice
+        assert mock_supp.await_args.args[4] == ["biaya kuliah Computer Science"]
+        assert plan.nodes  # recovered instead of falling back
+
 
 class TestUnresolvedMentionDetection:
     """The "ask, don't guess" tail of _route_retrieval: after retrieval has definitively
