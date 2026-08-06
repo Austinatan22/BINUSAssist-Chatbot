@@ -1059,7 +1059,7 @@ function MessageBubble({
                 className="block mt-2 pt-2 text-xs text-gray-500 hover:text-accent transition"
               >
                 {message.sources.length} source
-                {message.sources.length > 1 ? "s" : ""} — view
+                {message.sources.length > 1 ? "s" : ""}, view
               </button>
             )}
           </div>

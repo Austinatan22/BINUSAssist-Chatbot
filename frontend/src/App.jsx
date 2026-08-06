@@ -174,7 +174,7 @@ export default function App() {
 
   const handleCiteClick = (messageIndex, sourceId) => {
     setActiveMessageIndex(messageIndex);
-    // sourceId is null for the generic "X sources — view" button (as opposed to a
+    // sourceId is null for the generic "X sources, view" button (as opposed to a
     // specific citation number) -- leave whatever card is currently open alone in that
     // case, rather than forcing every card closed.
     if (sourceId != null) {
@@ -327,7 +327,7 @@ export default function App() {
         />
       </div>
       <footer className="border-t px-4 py-2 text-xs text-center text-muted-foreground bg-muted">
-        ⚠ AI-generated answers — verify critical information with faculty.
+        ⚠ AI-generated answers. Verify critical information with faculty.
       </footer>
     </div>
   );
