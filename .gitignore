@@ -2,6 +2,7 @@
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # Internal development notes / spec -- kept locally, not published
 PROJECT_LOG.md
@@ -9,6 +10,7 @@ PROJECT_LOG_DAILY.md
 IMPROVEMENTS.md
 KB_EXPANSION_PLAN.md
 prd-binus-socs-chatbot (1).md
+BINUSAssist_Technical_Review.pptx
 
 # Env
 .env
@@ -19,7 +21,10 @@ backend/documents/*
 !backend/documents/.gitkeep
 backend/feedback.jsonl
 backend/query_log.jsonl
-backend/scraped_urls.json
+# backend/scraped_urls.json is deliberately TRACKED: it is the list of public BINUS URLs
+# the KB is rebuilt from, and without it a clean clone seeds 2443 nodes instead of 2994,
+# losing all tuition/admission pages and the whole faculty roster (which is only reachable
+# via the roster URL in this list). No credentials or personal data in it.
 backend/url_cache.json
 
 # Local snapshot/rollback backups (large binaries / logs) -- never commit
