@@ -192,7 +192,16 @@ _INDONESIAN_PROGRAM_ALIASES: dict[str, list[str]] = {
     "Artificial Intelligence": ["Kecerdasan Buatan"],
     "Mathematics and Computer Science": ["Matematika dan Ilmu Komputer"],
     "Statistics and Computer Science": ["Statistika dan Ilmu Komputer"],
-    "Mobile Application and Technology": ["Aplikasi dan Teknologi Mobile", "Aplikasi dan Teknologi Bergerak"],
+    # Keyed on the CATALOG spelling, which has no "and" (the document is
+    # Mobile_Application___Technology_2023.pdf -> "Mobile Application Technology"). This
+    # entry was previously keyed on the "and" spelling, so it named a program that does not
+    # exist and silently resolved to nothing -- taking its two Indonesian aliases down with
+    # it. The natural English phrasing then had no literal match, and routing fell through
+    # to the nondeterministic out-of-catalog LLM check, which answered the question on one
+    # eval run and declined it on the next. Its sibling "Game Application and Technology" IS
+    # in the catalog verbatim, which is why only this one was flaky.
+    "Mobile Application Technology": ["Mobile Application and Technology",
+                                      "Aplikasi dan Teknologi Mobile", "Aplikasi dan Teknologi Bergerak"],
     "Game Application and Technology": ["Aplikasi dan Teknologi Game", "Aplikasi dan Teknologi Permainan"],
     # Per-campus / online-mode CS-family variants (KB Task 5). Their catalog names come from
     # the document filenames ("Computer Science Medan", "Computer Science Online", ...), but
@@ -1736,8 +1745,91 @@ _OVERRIDE_ATTEMPT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# The contextual fallback's LLM call only earns its latency when the question is plausibly
+# ABOUT BINUS -- another school's program, campus facilities, an admissions detail we don't
+# hold. A question with no academic vocabulary at all comes back OUT_OF_DOMAIN and has its
+# entire output discarded for the canned reply, so the call is pure waiting. Measured at
+# ~0.95s, on a path that has already spent ~1.7s on retrieval and ~1.1s on the rewrite retry;
+# out-of-scope questions were the whole reason first-token latency sat at p50 5.56s against
+# in-scope's 1.80s.
+#
+# Deliberately a VOCABULARY gate, not a retrieval-score one: a single transposed character
+# collapses the reranker from 0.709 to 0.119 on identical chunks (see the misspelled-tuition
+# fix), so a low score says nothing about whether a question is on-topic.
+#
+# Biased toward matching. A false positive costs only today's latency; a false negative costs
+# the canned fallback instead of a bespoke one -- which is exactly the degradation this path
+# already documents for an LLM error or an empty reply. It cannot produce a wrong answer.
+# Verified against the eval set: matches all 8 other-school, 3 missing-data and 2 borderline
+# questions (which keep the classifier), and none of the 20 out-of-scope ones.
+_DOMAIN_VOCAB_RE = re.compile(
+    r"\b(?:"
+    # English
+    r"binus|programs?|programmes?|curricul(?:um|a)|courses?|subjects?|majors?|minors?"
+    r"|degrees?|facult(?:y|ies)|campus(?:es)?|universit(?:y|ies)|schools?|admissions?"
+    r"|enroll\w*|tuition|fees?|scholarships?|lecturers?|professors?|graduat\w*"
+    r"|alumni|students?|careers?|credits?|semesters?|bachelors?|masters?|doctor(?:al|ate)?"
+    r"|phd|thes[ie]s|intern(?:ship)?s?|outcomes?|accreditation|classes|classroom"
+    r"|teach\w*|lectures?|syllabus|prerequisites?|transcripts?|jobs?|salary|employ\w*"
+    # Indonesian
+    r"|studi|prodi|jurusan|kurikulum|kuliah|fakultas|kampus|universitas|biaya|beasiswa"
+    r"|dosen|lulus\w*|mahasiswa|kari(?:r|er)|capaian|pembelajaran|sarjana|magister"
+    r"|pendaftaran|akreditasi|semester|gelar|skripsi|magang|mengajar|pengajar|kelas"
+    r"|syarat|pekerjaan|gaji|wisuda|akademik|academic"
+    r")\b",
+    re.IGNORECASE,
+)
 
-async def stream_contextual_fallback(query: str) -> AsyncGenerator[str, None]:
+
+def has_domain_vocabulary(query: str) -> bool:
+    """Does the query contain any academic/BINUS vocabulary at all? A cheap, deterministic
+    "is this plausibly on-topic" test, used to skip speculative LLM calls on questions that
+    are plainly unrelated (see _DOMAIN_VOCAB_RE for the calibration and the bias). Callers
+    must treat False as "no signal", never as "definitely off-topic"."""
+    return bool(_DOMAIN_VOCAB_RE.search(query))
+
+
+# Above difflib's 0.6 default and above rank_clarification_suggestions' 0.5 floor: this
+# gate only needs to catch a MISSPELLING of a real name, not offer a "did you mean", so it
+# can afford to be strict. Measured on the realistic typos this protects -- "Cybr Security"
+# 0.96, "Data Sciene" 0.96, "Artificial Inteligence" 0.98, "Sofware Engineering" 0.97 --
+# while unrelated wording sits far below.
+_ENTITY_RESEMBLANCE_CUTOFF = 0.78
+
+
+def resembles_known_entity(
+    query: str, program_names: Iterable[str], campus_names: Iterable[str]
+) -> bool:
+    """Does the query contain something that LOOKS like a known program or campus name,
+    even misspelled? Complements has_domain_vocabulary, which only knows generic academic
+    words: "Cybr Security" and "kemanggisan" carry no such word yet are squarely on-topic,
+    and gating the rewrite retry on vocabulary alone would strand exactly the
+    vocabulary-mismatch typos that retry exists to rescue.
+
+    Campus aliases go through resolve_named_campus rather than string distance, since an
+    alias ("anggrek" -> Kemanggisan) bears no lexical resemblance to its canonical name.
+    """
+    campus_names = set(campus_names)
+    if campus_names and resolve_named_campus(query, campus_names):
+        return True
+    names = [n.lower() for n in list(program_names) + list(campus_names)]
+    if not names:
+        return False
+    words = re.findall(r"[A-Za-z]+", query.lower())
+    for size in (1, 2, 3):
+        for i in range(len(words) - size + 1):
+            gram = " ".join(words[i:i + size])
+            if len(gram) < 4:
+                continue
+            for name in names:
+                if difflib.SequenceMatcher(None, gram, name).ratio() >= _ENTITY_RESEMBLANCE_CUTOFF:
+                    return True
+    return False
+
+
+async def stream_contextual_fallback(
+    query: str, has_history: bool = False
+) -> AsyncGenerator[str, None]:
     """Emit a fallback that ACKNOWLEDGES the topic when the unanswerable question is still
     about BINUS (a program in another school, campus facilities, admissions we don't have on
     file), instead of always repeating the same canned line. One constrained LLM call both
@@ -1755,6 +1847,20 @@ async def stream_contextual_fallback(query: str) -> AsyncGenerator[str, None]:
     # A manipulation/override attempt gets the flat canned decline, deterministically, without
     # ever reaching the classifier (which could be talked into a bespoke reply).
     if is_prompt_extraction_attempt(query) or _OVERRIDE_ATTEMPT_RE.search(query):
+        for event in _fallback_events(language):
+            yield event
+        return
+
+    # Nothing academic in the question at all -> the classifier would answer OUT_OF_DOMAIN and
+    # we would discard it. Skip the call and emit the same canned reply directly (see
+    # _DOMAIN_VOCAB_RE for why this is a vocabulary test and why erring toward the LLM is safe).
+    #
+    # Only on a FRESH turn. stream_answer is handed the raw message, not the condensed
+    # standalone query (chat_service passes `plan.generation_query or message`), so a
+    # follow-up carries its topic in the history rather than in its own words -- "tell me
+    # more about it" has no academic vocabulary but is squarely on-topic. Follow-ups are the
+    # rare case; the latency this exists to cut is fresh out-of-scope questions.
+    if not has_history and not has_domain_vocabulary(query):
         for event in _fallback_events(language):
             yield event
         return
@@ -1984,7 +2090,7 @@ async def stream_answer(
         # Retrieval came up empty / below the gate. Emit a topic-aware fallback when the
         # question is still about BINUS, falling back to the canned reply only when it's
         # strictly unrelated (see stream_contextual_fallback).
-        async for event in stream_contextual_fallback(query):
+        async for event in stream_contextual_fallback(query, has_history=bool(history)):
             yield event
         return
 
@@ -2026,7 +2132,7 @@ async def stream_answer(
             # answer. Same topic-aware fallback as the empty-retrieval case above. (A
             # substantial answer that merely appended a stray sentinel falls through and
             # streams, with the sentinel excised downstream by _strip_trailing_sentinel.)
-            async for event in stream_contextual_fallback(query):
+            async for event in stream_contextual_fallback(query, has_history=bool(history)):
                 yield event
             return
 

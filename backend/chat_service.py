@@ -39,6 +39,7 @@ from backend.rag.generation import (
     detect_named_programs,
     detect_unresolved_campus_mention,
     detect_unresolved_program_mention,
+    has_domain_vocabulary,
     is_campus_programs_query,
     is_leadership_query,
     is_prompt_extraction_attempt,
@@ -47,6 +48,7 @@ from backend.rag.generation import (
     normalize_campus_aliases,
     resolve_named_campus,
     rank_clarification_suggestions,
+    resembles_known_entity,
     rewrite_query,
     strip_retrieval_filler,
     stream_answer,
@@ -460,8 +462,27 @@ class ChatService:
             # Open retrieval. Retry with LLM-rewritten paraphrases if the first pass was
             # too weak to clear the gate -- skipped once the token budget is spent, since
             # generation is about to be declined anyway.
+            #
+            # Also skipped when the query contains no academic vocabulary at all. A
+            # paraphrase of "spaghetti carbonara" is still about spaghetti carbonara, so the
+            # rewrite plus its second retrieval spent ~1.2s to reach the same fallback --
+            # the largest remaining cost on the out-of-scope tail (p50 5.56s vs in-scope's
+            # 1.80s) once the contextual-fallback call was gated the same way.
+            #
+            # Deliberately NOT a score floor: one transposed character drops the reranker
+            # from 0.709 to 0.119 on identical chunks, so the misspelled-tuition queries this
+            # retry exists to rescue sit exactly where a floor would cut. Those queries
+            # literal-match their program name and take the single-program branch above, not
+            # this one, so they never reach this gate at all. A misspelled query that reaches
+            # HERE (no literal match) is an out-of-catalog near-miss like "Data Enginering",
+            # which must fall back regardless.
             nodes = default_nodes
-            if (not nodes or nodes[0].score < gate) and not is_budget_exceeded():
+            # Vocabulary alone is not enough: "Cybr Security" and "kemanggisan" contain no
+            # academic word yet are exactly the misspelling/alias cases the retry rescues.
+            rewrite_worthwhile = has_domain_vocabulary(retrieval_query) or resembles_known_entity(
+                plan.standalone_query, plan.program_names, known_campus_names()
+            )
+            if (not nodes or nodes[0].score < gate) and rewrite_worthwhile and not is_budget_exceeded():
                 extra_queries = await rewrite_query(retrieval_query)
                 if extra_queries:
                     nodes = await retrieve_and_rerank(

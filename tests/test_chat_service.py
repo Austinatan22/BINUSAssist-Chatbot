@@ -273,6 +273,87 @@ class TestParaphrasesReachTheSupplementaryRetry:
         assert plan.nodes  # recovered instead of falling back
 
 
+class TestOpenBranchRewriteGate:
+    """The open-retrieval rewrite retry costs an LLM call plus a second retrieval (~1.2s).
+    A paraphrase of an off-topic question is still off-topic, so it's skipped when the query
+    carries no academic vocabulary. The program-scoped branches are deliberately NOT gated:
+    that's where the misspelled-tuition queries live, and a typo collapses the reranker to
+    0.119 -- see test_route_retrieval_hands_its_rewrite_down_to_the_supplementary_retry."""
+
+    @staticmethod
+    def _run(monkeypatch, query, first_pass_score=0.1):
+        monkeypatch.setattr(chat_service, "is_budget_exceeded", lambda: False)
+        mock_rewrite = AsyncMock(return_value=["a paraphrase"])
+        monkeypatch.setattr(chat_service, "rewrite_query", mock_rewrite)
+        monkeypatch.setattr(chat_service, "known_campus_names", lambda: _ALL_CAMPUSES)
+        monkeypatch.setattr(
+            chat_service, "retrieve_and_rerank", AsyncMock(return_value=[_fake_node(0.9)])
+        )
+        service = _service()
+        plan = Plan(standalone_query=query, program_names=_CATALOG)
+        program_match = SimpleNamespace(matched=[], named_unmatched=False)
+        asyncio.run(service._route_retrieval(
+            plan, program_match, {}, [_fake_node(first_pass_score)], query,
+        ))
+        return mock_rewrite, plan
+
+    @pytest.mark.parametrize("query", [
+        "Can you recommend a good recipe for spaghetti carbonara?",
+        "What is the capital of France?",
+        "Bagaimana cuaca di Tokyo hari ini?",
+        "Who won the FIFA World Cup in 2022?",
+        "Tell me a joke.",
+        "Data Enginering",          # out-of-catalog near-miss: must fall back either way
+    ])
+    def test_off_topic_query_skips_the_rewrite(self, monkeypatch, query):
+        mock_rewrite, plan = self._run(monkeypatch, query)
+        mock_rewrite.assert_not_awaited()
+        assert plan.nodes == []  # still falls back, just ~1.2s sooner
+
+    @pytest.mark.parametrize("query", [
+        "what are the career prospects after graduating",
+        "berapa biaya kuliah untuk mahasiswa baru",
+        "what laboratory facilities are available on campus",
+        "apa saja mata kuliah wajib di semester lima",
+        "how do I apply for a scholarship",
+    ])
+    def test_on_topic_query_still_gets_the_rewrite(self, monkeypatch, query):
+        # No program matched, but the question is plainly academic -- the retry is exactly
+        # the vocabulary-mismatch case it was built for and must still fire.
+        mock_rewrite, plan = self._run(monkeypatch, query)
+        mock_rewrite.assert_awaited_once()
+        assert plan.nodes  # recovered by the retry
+
+    @pytest.mark.parametrize("query", [
+        # typo'd programs -- all present in _CATALOG, which is deliberately a 4-item
+        # subset, so a typo of a program NOT in it correctly resolves to nothing.
+        "Cybr Security",
+        "Data Sciene",
+        "berapa lama Sofware Engineering",
+        "Compter Science",
+        "kemanggisan",                      # bare campus name
+        "apa alamat kemanggisan",
+        "di mana lokasi alam sutera",
+        "anggrek",                          # campus ALIAS, no lexical resemblance
+    ])
+    def test_misspelled_or_bare_entity_still_gets_the_rewrite(self, monkeypatch, query):
+        # The near-regression this gate almost shipped: none of these contain an academic
+        # vocabulary word, but all are squarely on-topic and are exactly the
+        # vocabulary-mismatch cases the retry exists for. resembles_known_entity catches
+        # them; a vocabulary-only gate did not.
+        mock_rewrite, _plan_out = self._run(monkeypatch, query)
+        mock_rewrite.assert_awaited_once()
+
+    def test_a_confident_first_pass_never_reaches_the_gate(self, monkeypatch):
+        # The gate sits behind the existing score check, so an on-topic query that already
+        # cleared the threshold must not pay for a rewrite either.
+        mock_rewrite, plan = self._run(
+            monkeypatch, "what are the career prospects after graduating", first_pass_score=0.95
+        )
+        mock_rewrite.assert_not_awaited()
+        assert plan.nodes
+
+
 class TestUnresolvedMentionDetection:
     """The "ask, don't guess" tail of _route_retrieval: after retrieval has definitively
     come up empty, an unresolved campus/program token gets stashed on the Plan for

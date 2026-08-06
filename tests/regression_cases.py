@@ -63,6 +63,18 @@ ROUTING_CASES = [
      ["Software Engineering", "Game Application and Technology"]),
     # A program whose name contains another ("Computer Science") keeps only the specific one.
     ("Tell me about Mathematics and Computer Science", ["Mathematics and Computer Science"]),
+    # The catalog name has no "and" (from Mobile_Application___Technology_2023.pdf), but the
+    # natural phrasing does. The alias table was keyed on the "and" spelling, so it named a
+    # nonexistent program and matched nothing -- routing then fell through to the
+    # nondeterministic out-of-catalog LLM check, which answered this on one eval run and
+    # declined it on the next (2026-08-07). Both spellings and both Indonesian aliases must
+    # resolve to the one catalog name.
+    ("Apa capaian pembelajaran program studi Mobile Application and Technology?",
+     ["Mobile Application Technology"]),
+    ("What are the learning outcomes of Mobile Application Technology?",
+     ["Mobile Application Technology"]),
+    ("Apa capaian pembelajaran Aplikasi dan Teknologi Mobile?",
+     ["Mobile Application Technology"]),
     # A campus name is not a program -- this wrongly routed to a fallback before the
     # classifier learned campuses aren't programs (still deterministic here: no catalog
     # name appears literally, so matched is empty and retrieval stays open).
