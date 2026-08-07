@@ -575,6 +575,34 @@ def admission_requirement_url_for_campus(campus_name: str) -> Optional[str]:
     return None
 
 
+# Every fee the tuition-fee pages publish is labelled "Semester 1" or "(hanya 1x)", so the KB
+# could say what the first semester costs and nothing at all about the second. Real traffic asks
+# ("Berapa biaya kuliah semester 2?"), and the honest answer is not a fallback: the recurring fees
+# repeat at the same amount, which is a fact about the fee structure that the page's own labels
+# imply but never state. Appended to each fee row rather than emitted as its own chunk because the
+# tuition route retrieves fee ROWS (see chat_service._retry_tuition_across_campuses); a standalone
+# note would have to win a place in the top-N against them, and losing that race means the fact is
+# absent exactly when it is needed.
+#
+# Deliberately claims nothing about the program total, and says nothing about how to compute one.
+# The published "Estimasi Total Biaya" does not equal 8 x (semester fee) + the one-time fees on any
+# campus -- Kemanggisan's total implies 7.23 semesters, Bandung's 5.49 -- because tuition is a fixed
+# component plus a variable per-SKS component and SKS load differs by semester (see
+# socs_documents/Tuition_Fees_Computer_Science.md). The authoritative total is already in the same
+# row, so the note does not need to argue about arithmetic. Guidance on how to ANSWER belongs in
+# rag/prompts.py, not repeated 16 times in retrieved context.
+#
+# Kept to ~60 tokens for that reason: the tuition route retrieves up to 16 rows, so every token
+# here is paid 16 times. Indonesian first because that is the language of the labels it qualifies,
+# with a short English clause so an English "semester 2" query still has the fact in its own words.
+_SEMESTER_FEE_NOTE = (
+    "Biaya Kuliah dan Biaya Laboratorium sama untuk setiap semester berikutnya "
+    "(Semester 2 dan seterusnya); Biaya Peralatan dan Biaya Sumbangan / DP3 dibayar satu kali. "
+    "Per-semester tuition and laboratory fees repeat at the same amount in later semesters; "
+    "equipment and DP3 fees are one-time."
+)
+
+
 def _tuition_fee_row_nodes(url: str, text: str) -> list[TextNode]:
     """Splits every data row of a BINUS tuition-fee page's markdown table(s) into its
     own small chunk: one program, one campus, one academic year per chunk. Applied to
@@ -626,7 +654,7 @@ def _tuition_fee_row_nodes(url: str, text: str) -> list[TextNode]:
         if not facts:
             continue
         year_suffix = f" (Academic Year {year_label})" if year_label else ""
-        node_text = f"{campus} -- {program}{year_suffix}: {facts}"
+        node_text = f"{campus} -- {program}{year_suffix}: {facts}. {_SEMESTER_FEE_NOTE}"
         nodes.append(TextNode(
             text=node_text,
             metadata={

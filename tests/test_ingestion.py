@@ -36,6 +36,7 @@ from backend.rag.ingestion import (
     _section_headers,
     _cache_url_nodes,
     _load_url_cache,
+    _SEMESTER_FEE_NOTE,
     _tuition_fee_row_nodes,
     forget_scraped_url,
     forget_url_cache,
@@ -605,6 +606,44 @@ class TestTuitionFeeRowNodes:
         assert node.metadata["source_file"] == self._url()
         assert node.metadata["parent_text"] == node.text
         assert "Kemanggisan" in node.metadata["section_title"]
+
+    def test_every_row_carries_the_later_semester_fee_note(self):
+        # The pages label every fee "Semester 1" or "(hanya 1x)", so without this the KB could
+        # say what semester 1 costs and nothing at all about semester 2 -- a real question in
+        # query_log.jsonl. Attached to each row rather than emitted as its own chunk because the
+        # tuition route retrieves fee ROWS, and a standalone note would have to win a top-N slot
+        # against them; losing that race means the fact is missing exactly when it is needed.
+        nodes = _tuition_fee_row_nodes(self._url(), _SAMPLE_TUITION_PAGE)
+        assert nodes
+        assert all(_SEMESTER_FEE_NOTE in n.text for n in nodes)
+        assert all(_SEMESTER_FEE_NOTE in n.metadata["parent_text"] for n in nodes)
+
+    def test_the_note_does_not_displace_the_row_facts(self):
+        # The note is appended, never substituted: the figures and the published total must still
+        # be readable, and the node must still open with campus/program/year so the reranker and
+        # the citation label behave exactly as before.
+        nodes = _tuition_fee_row_nodes(self._url(), _SAMPLE_TUITION_PAGE)
+        cs_2027 = next(n for n in nodes if "Computer Science" in n.text and "2027/2028" in n.text)
+        assert cs_2027.text.startswith("BINUS Kemanggisan -- Computer Science (Academic Year 2027/2028):")
+        assert "Biaya Kuliah Semester 1: Rp. 27,300,000" in cs_2027.text
+        assert "Estimasi Total Biaya*: Rp. 279,100,000" in cs_2027.text
+
+    def test_the_note_makes_no_claim_about_a_program_total(self):
+        # Guards the reasoning in _SEMESTER_FEE_NOTE's comment. The published Estimasi Total does
+        # NOT equal 8 x semester + one-time on any campus (Kemanggisan's implies 7.23 semesters),
+        # so a note that invited multiplying the semester fee would have the bot contradict the
+        # figure printed in the same row.
+        note = _SEMESTER_FEE_NOTE.lower()
+        # Not a blanket ban on arithmetic words: "dibayar satu kali" ("paid one time") is the
+        # one-time-fee fact itself and must stay. What must be absent is any mention of a program
+        # total or any instruction to derive one.
+        for forbidden in ("total", "estimasi", "mengalikan", "multipl", "delapan", "eight"):
+            assert forbidden not in note, f"note should not reason about totals: {forbidden!r}"
+
+    def test_the_note_stays_cheap_enough_to_repeat_per_row(self):
+        # Paid once per retrieved row, and the tuition route retrieves up to 16, so this is a
+        # budget not a style preference. ~4 chars/token puts 400 chars near 100 tokens.
+        assert len(_SEMESTER_FEE_NOTE) < 400, "note is repeated on every fee row; keep it short"
 
     def test_different_campus_url_produces_a_different_campus_label(self):
         nodes = _tuition_fee_row_nodes(self._url("binus-medan"), _SAMPLE_TUITION_PAGE)
