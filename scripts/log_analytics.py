@@ -1,16 +1,20 @@
 """Analytics view over the query log (IMPROVEMENTS.md #6.1's un-done half).
 
 `backend/query_log.jsonl` captures one record per /chat request -- the raw and condensed
-query, query_type, matched program(s), top rerank score, `fallback`, history-turn count, and
-latency. This turns that raw log into a report, so the bot becomes a feedback loop for the KB:
-the headline signal is FALLBACKS grouped by query ("15 people asked about housing this week;
-we have nothing on it"), which are a direct pointer at content gaps.
+query, its language, which retrieval route answered it, matched program(s), top rerank score,
+`fallback`, whether the rewrite retry fired, time-to-first-token and end-to-end latency. This
+turns that raw log into a report, so the bot becomes a feedback loop for the KB: the headline
+signal is FALLBACKS grouped by query ("15 people asked about housing this week; we have nothing
+on it"), which are a direct pointer at content gaps.
 
-Pure JSONL parsing -- no models, GPU, LLM API, or network, so it's fast and runs anywhere. All
+Pure JSON parsing -- no models, GPU, LLM API, or network, so it's fast and runs anywhere. All
 the aggregation lives in pure functions (summarize / *_breakdown / top_*) that take a list of
 record dicts, so they're unit-tested directly (tests/test_log_analytics.py) without touching
 the filesystem. Tolerates schema drift: every field is read with .get(), since older records
-predate later additions (e.g. `top_score`, `unresolved_term`).
+predate later additions (`top_score`, `unresolved_term`, and the whole 2026-08-08 batch --
+`route`, `ttft_ms`, `plan_ms`, `language`, `aspects`, `node_count`, `cache`). A missing field
+means "not measured" and is excluded from its metric rather than counted as zero, so a window
+spanning the change reports honestly on both halves.
 
 Usage:
   python scripts/log_analytics.py                 # full report over the whole log
@@ -31,25 +35,48 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from backend.config import settings
 
-# PRD §9 latency success criterion: this is END-TO-END latency (includes the LLM call), not
-# time-to-first-token, so it's a looser cousin of the PRD's <3s TTFT target -- reported as
-# context, not as the PRD metric itself (which eval.py measures on TTFT).
+# PRD §9's latency criterion: <3s for 90% of queries, measured on time-to-first-token. Records
+# written from 2026-08-08 carry `ttft_ms` and are scored against it directly; older records have
+# only end-to-end `latency_ms` (the whole generation included), a looser cousin reported as
+# context. Both are shown, TTFT first, since that is the criterion itself.
 _LATENCY_TARGET_MS = 3000
 
 
 def load_records(path: Path) -> list[dict]:
-    """Parse a JSONL query log into a list of record dicts, skipping blank/corrupt lines
-    (a partially-written final line from a crash mid-append shouldn't sink the whole report)."""
+    """Parse the query log into a list of record dicts.
+
+    Handles both record formats in one pass. chat_service._log_query used to write one compact
+    record per line; it now pretty-prints each record over several lines, because a record with
+    ten cited tuition URLs runs past 1,500 characters and nobody can read that in an editor.
+    Splitting on newlines would break on the new format and reading a JSON array would break on
+    the old, so scan with raw_decode instead: it consumes one object at a time and reports where
+    it stopped, which works whatever the whitespace between objects looks like.
+
+    A corrupt or half-written record (a crash mid-append) is skipped rather than sinking the
+    rest of the file: resync on the next line beginning with "{" at column 0, which is where
+    every record starts and, since JSON escapes newlines inside strings, can never occur inside
+    one. Reads the whole file into memory, which is fine at this scale (369KB / 667 records) for
+    a report script that is run by hand.
+    """
+    text = Path(path).read_text(encoding="utf-8")
+    decoder = json.JSONDecoder()
     records: list[dict] = []
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                records.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
+    i, n = 0, len(text)
+    while i < n:
+        while i < n and text[i].isspace():
+            i += 1
+        if i >= n:
+            break
+        try:
+            obj, i = decoder.raw_decode(text, i)
+        except json.JSONDecodeError:
+            boundary = text.find("\n{", i)
+            if boundary == -1:
+                break
+            i = boundary + 1
+            continue
+        if isinstance(obj, dict):
+            records.append(obj)
     return records
 
 
@@ -84,31 +111,56 @@ def _percentile(values: list[float], pct: float) -> float:
     return ordered[k]
 
 
+def _numbers(records: list[dict], field: str) -> list[float]:
+    """The numeric values of `field` across records, skipping records that lack it or carry
+    null. Older records predate several fields, so a missing value means "not measured", never 0
+    -- averaging a missing latency as zero would quietly flatter every percentile."""
+    return [r[field] for r in records if isinstance(r.get(field), (int, float))]
+
+
+def _timing(values: list[float]) -> dict:
+    """Percentiles plus the share under the 3s target, for one timing field."""
+    within = sum(1 for ms in values if ms < _LATENCY_TARGET_MS)
+    return {
+        "count": len(values),
+        "p50": _percentile(values, 50),
+        "p90": _percentile(values, 90),
+        "p99": _percentile(values, 99),
+        "max": max(values) if values else 0,
+        "within_3s": within,
+        "within_3s_rate": (within / len(values)) if values else 0.0,
+    }
+
+
 def summarize(records: list[dict]) -> dict:
     """Headline metrics over a record list. Everything is derived, never assumed: fallback
-    rate is the PRD #6.1 signal; latency percentiles are reported against the 3s target."""
+    rate is the PRD #6.1 signal; TTFT percentiles are the PRD §9 latency criterion, with
+    end-to-end latency alongside for the records that predate ttft_ms."""
     total = len(records)
     fallbacks = [r for r in records if r.get("fallback")]
-    latencies = [r["latency_ms"] for r in records if isinstance(r.get("latency_ms"), (int, float))]
-    scores = [r["top_score"] for r in records if isinstance(r.get("top_score"), (int, float))]
+    scores = _numbers(records, "top_score")
     timestamps = [ts for ts in (_parse_ts(r) for r in records) if ts is not None]
-    within_target = sum(1 for ms in latencies if ms < _LATENCY_TARGET_MS)
+    rewrite_scope = [r for r in records if r.get("rewrite_triggered") is not None]
     return {
         "total": total,
         "fallbacks": len(fallbacks),
         "fallback_rate": (len(fallbacks) / total) if total else 0.0,
-        "latency_ms": {
-            "count": len(latencies),
-            "p50": _percentile(latencies, 50),
-            "p90": _percentile(latencies, 90),
-            "p99": _percentile(latencies, 99),
-            "max": max(latencies) if latencies else 0,
-            "within_3s": within_target,
-            "within_3s_rate": (within_target / len(latencies)) if latencies else 0.0,
-        },
+        "ttft_ms": _timing(_numbers(records, "ttft_ms")),
+        "latency_ms": _timing(_numbers(records, "latency_ms")),
+        # Median time spent in ChatService._plan (condense, cache lookup, classification,
+        # retrieval) against median TTFT: the difference is the LLM provider's, and this split
+        # is what says whether a slow turn is ours to fix.
+        "plan_ms_p50": _percentile(_numbers(records, "plan_ms"), 50),
         "top_score": {
             "count": len(scores),
             "mean": (sum(scores) / len(scores)) if scores else 0.0,
+        },
+        # The rewrite retry is the most expensive optional step in the pipeline (an LLM call
+        # plus a second retrieval pass). Counted only over records that carry the field at all,
+        # so the rate isn't diluted by the records written before it existed.
+        "rewrites": {
+            "scope": len(rewrite_scope),
+            "triggered": sum(1 for r in rewrite_scope if r.get("rewrite_triggered")),
         },
         "date_range": (
             (min(timestamps).isoformat(), max(timestamps).isoformat()) if timestamps else (None, None)
@@ -119,6 +171,56 @@ def summarize(records: list[dict]) -> dict:
 def query_type_breakdown(records: list[dict]) -> list[tuple[str, int]]:
     """(query_type, count) most-common first. Missing type -> 'unknown'."""
     return Counter(r.get("query_type") or "unknown" for r in records).most_common()
+
+
+def route_breakdown(records: list[dict]) -> list[dict]:
+    """Per-route counts, most-used first: how often each branch of _route_retrieval ran, how
+    often it fell back, how often it needed the rewrite retry to rescue it, and its median TTFT.
+
+    This is the table `query_type` could never give. query_type says how many programs were
+    named; `route` says which branch actually answered, and the two disagree (a tuition query
+    names one program and is logged "comparison" because it renders as a table). The rewrite
+    column is the one to read: a route that needs the retry on a large share of its traffic is
+    a route whose first retrieval is aimed at the wrong sources.
+
+    Records with no `route` (written before 2026-08-08, or turns where no routing ran) are
+    excluded rather than lumped into an "unknown" row, which would be the largest row in any
+    window spanning the change and would say nothing.
+    """
+    by_route: dict[str, list[dict]] = {}
+    for r in records:
+        route = r.get("route")
+        if route:
+            by_route.setdefault(route, []).append(r)
+    rows = []
+    for route, rs in by_route.items():
+        rewrite_scope = [r for r in rs if r.get("rewrite_triggered") is not None]
+        rows.append({
+            "route": route,
+            "count": len(rs),
+            "fallbacks": sum(1 for r in rs if r.get("fallback")),
+            "rewrites": sum(1 for r in rewrite_scope if r.get("rewrite_triggered")),
+            "rewrite_scope": len(rewrite_scope),
+            "ttft_p50": _percentile(_numbers(rs, "ttft_ms"), 50),
+        })
+    return sorted(rows, key=lambda row: -row["count"])
+
+
+def language_breakdown(records: list[dict]) -> list[tuple[str, int]]:
+    """(language, count) most-common first -- the split between Indonesian and English traffic,
+    which the fallback and latency numbers are worth reading against separately (an Indonesian
+    question against an English-only catalog PDF is the exact failure the rewrite retry exists
+    for). Absent on records predating the field."""
+    return Counter(r["language"] for r in records if r.get("language")).most_common()
+
+
+def cache_breakdown(records: list[dict]) -> list[tuple[str, int]]:
+    """(hit / rejected / miss, count). "rejected" means the embedding was close enough but a
+    deterministic gate vetoed the replay (see rag/cache.py); it used to appear only as a log
+    line nothing aggregated. Absent on records predating the field."""
+    order = {"hit": 0, "rejected": 1, "miss": 2}
+    counts = Counter(r["cache"] for r in records if r.get("cache"))
+    return sorted(counts.items(), key=lambda kv: order.get(kv[0], 99))
 
 
 def top_programs(records: list[dict], limit: int) -> list[tuple[str, int]]:
@@ -179,6 +281,9 @@ def build_report(records: list[dict], top: int) -> dict:
     return {
         "summary": summarize(records),
         "by_query_type": query_type_breakdown(records),
+        "by_route": route_breakdown(records),
+        "by_language": language_breakdown(records),
+        "by_cache": cache_breakdown(records),
         "top_programs": top_programs(records, top),
         "top_fallback_queries": fallback_queries(records, top),
         "unresolved_terms": unresolved_terms(records, top),
@@ -207,21 +312,62 @@ def format_report(report: dict, top: int) -> str:
         f"Fallbacks:     {s['fallbacks']}  ({_fmt_pct(s['fallback_rate'])})   "
         "<- content-gap signal (#6.1)"
     )
+    ttft = s["ttft_ms"]
+    if ttft["count"]:
+        lines.append(
+            f"TTFT (ms):     p50={ttft['p50']:.0f}  p90={ttft['p90']:.0f}  "
+            f"p99={ttft['p99']:.0f}  max={ttft['max']:.0f}"
+        )
+        lines.append(
+            f"  under 3s:    {ttft['within_3s']}/{ttft['count']}  "
+            f"({_fmt_pct(ttft['within_3s_rate'])})   <- PRD 9 target: 90%"
+        )
+        if s["plan_ms_p50"]:
+            lines.append(
+                f"  of which p50 retrieval+routing: {s['plan_ms_p50']:.0f}ms  "
+                f"(the rest is the LLM)"
+            )
     if lat["count"]:
         lines.append(
-            f"Latency (end-to-end, ms):  p50={lat['p50']:.0f}  p90={lat['p90']:.0f}  "
+            f"End-to-end (ms):  p50={lat['p50']:.0f}  p90={lat['p90']:.0f}  "
             f"p99={lat['p99']:.0f}  max={lat['max']:.0f}"
         )
+    if s["top_score"]["count"]:
+        lines.append(f"Mean top rerank score: {s['top_score']['mean']:.3f}")
+    rw = s["rewrites"]
+    if rw["scope"]:
         lines.append(
-            f"  under 3s:    {lat['within_3s']}/{lat['count']}  ({_fmt_pct(lat['within_3s_rate'])})"
+            f"Rewrite retry fired: {rw['triggered']}/{rw['scope']}  "
+            f"({_fmt_pct(rw['triggered'] / rw['scope'])})   <- +1 LLM call, +1 retrieval pass"
         )
-    if report["summary"]["top_score"]["count"]:
-        lines.append(f"Mean top rerank score: {report['summary']['top_score']['mean']:.3f}")
+    if report["by_cache"]:
+        lines.append(
+            "Semantic cache:  "
+            + "  ".join(f"{state}={n}" for state, n in report["by_cache"])
+        )
+    if report["by_language"]:
+        lines.append(
+            "Language:        "
+            + "  ".join(f"{lang}={n}" for lang, n in report["by_language"])
+        )
 
     lines.append("")
     lines.append("BY QUERY TYPE")
     for qtype, n in report["by_query_type"]:
         lines.append(f"  {n:5}  {qtype}")
+
+    if report["by_route"]:
+        lines.append("")
+        lines.append("BY RETRIEVAL ROUTE -- which branch answered, and what it cost")
+        lines.append(f"  {'count':>5} {'fallback':>9} {'rewrite':>8} {'ttft p50':>9}  route")
+        for row in report["by_route"]:
+            rewrite = (
+                f"{row['rewrites']}/{row['rewrite_scope']}" if row["rewrite_scope"] else "-"
+            )
+            ttft_p50 = f"{row['ttft_p50']:.0f}ms" if row["ttft_p50"] else "-"
+            lines.append(
+                f"  {row['count']:5} {row['fallbacks']:9} {rewrite:>8} {ttft_p50:>9}  {row['route']}"
+            )
 
     lines.append("")
     lines.append(f"TOP FALLBACK QUERIES (up to {top}) -- likely content gaps")

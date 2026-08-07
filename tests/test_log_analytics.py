@@ -2,20 +2,23 @@
 #6.1's analytics half). All aggregation is pure functions over record dicts, so these run
 with no filesystem, models, GPU, or network. Records are hand-built to mirror the real log
 schema, including the schema drift the parser must tolerate (older rows lack `top_score` /
-`unresolved_term`)."""
+`unresolved_term`, and rows before 2026-08-08 lack `route` / `ttft_ms` / `language` / `cache`)."""
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from scripts.log_analytics import (
     build_report,
+    cache_breakdown,
     cited_sources,
     fallback_queries,
     filter_since,
     format_report,
+    language_breakdown,
     load_records,
     query_type_breakdown,
     response_coverage,
+    route_breakdown,
     summarize,
     top_programs,
     unresolved_terms,
@@ -34,10 +37,28 @@ def _rec(**kw):
         "top_score": 0.9,
         "fallback": False,
         "history_turns": 0,
+        "language": "en",
+        "route": "program_scoped",
+        "node_count": 5,
+        "cache": "miss",
+        "rewrite_triggered": False,
+        "plan_ms": 900,
+        "ttft_ms": 1200,
         "latency_ms": 1500,
     }
     base.update(kw)
     return base
+
+
+def _old_rec(**kw):
+    """A record in the pre-2026-08-08 shape: no route, ttft_ms, language, cache or
+    rewrite_triggered. Every metric derived from those fields must exclude it rather than read
+    a missing value as zero."""
+    rec = _rec(**kw)
+    for gone in ("route", "ttft_ms", "plan_ms", "language", "cache", "rewrite_triggered",
+                 "node_count"):
+        rec.pop(gone, None)
+    return rec
 
 
 class TestSummarize:
@@ -72,6 +93,36 @@ class TestSummarize:
         assert s["total"] == 2
         assert s["top_score"]["count"] == 0  # neither had top_score
         assert s["fallbacks"] == 1
+
+    def test_ttft_is_scored_against_the_prd_target_separately_from_end_to_end(self):
+        # ttft_ms is the PRD criterion; latency_ms includes the whole generation. A turn can
+        # pass one and fail the other, so they must not be conflated.
+        records = [_rec(ttft_ms=1200, latency_ms=4000), _rec(ttft_ms=5000, latency_ms=6000)]
+        s = summarize(records)
+        assert s["ttft_ms"]["within_3s"] == 1
+        assert s["latency_ms"]["within_3s"] == 0
+
+    def test_pre_ttft_records_are_excluded_not_counted_as_zero(self):
+        # The trap: a missing ttft_ms read as 0 would count as "under 3s" and flatter the
+        # metric. Old records must drop out of the TTFT scope entirely while still counting
+        # towards totals and fallbacks.
+        records = [_rec(ttft_ms=1000), _old_rec(), _old_rec(fallback=True)]
+        s = summarize(records)
+        assert s["total"] == 3
+        assert s["fallbacks"] == 1
+        assert s["ttft_ms"]["count"] == 1
+        assert s["ttft_ms"]["within_3s_rate"] == 1.0
+
+    def test_rewrite_rate_is_over_records_that_carry_the_field(self):
+        # Same trap for rewrite_triggered: diluting the rate with records written before the
+        # field existed is how the 2026-08-07 "0/66 rewrites" reading went wrong.
+        records = [_rec(rewrite_triggered=True), _rec(rewrite_triggered=False), _old_rec()]
+        rw = summarize(records)["rewrites"]
+        assert (rw["triggered"], rw["scope"]) == (1, 2)
+
+    def test_plan_ms_p50_is_reported(self):
+        records = [_rec(plan_ms=500), _rec(plan_ms=900), _rec(plan_ms=1300)]
+        assert summarize(records)["plan_ms_p50"] == 900
 
     def test_date_range_uses_min_and_max_timestamps(self):
         records = [
@@ -124,6 +175,41 @@ class TestBreakdowns:
     def test_missing_query_type_is_unknown(self):
         records = [{"query": "x", "fallback": False}]
         assert query_type_breakdown(records) == [("unknown", 1)]
+
+    def test_route_breakdown_counts_fallbacks_and_rewrites_per_route(self):
+        records = [
+            _rec(route="program_scoped", rewrite_triggered=True, ttft_ms=6000),
+            _rec(route="program_scoped", rewrite_triggered=False, ttft_ms=1000),
+            _rec(route="program_scoped", rewrite_triggered=False, ttft_ms=1400),
+            _rec(route="open", rewrite_triggered=True, fallback=True, ttft_ms=2000),
+        ]
+        rows = {row["route"]: row for row in route_breakdown(records)}
+        assert rows["program_scoped"]["count"] == 3
+        assert (rows["program_scoped"]["rewrites"], rows["program_scoped"]["rewrite_scope"]) == (1, 3)
+        assert rows["program_scoped"]["fallbacks"] == 0
+        assert rows["program_scoped"]["ttft_p50"] == 1400
+        assert rows["open"]["fallbacks"] == 1
+
+    def test_route_breakdown_is_ordered_by_count(self):
+        records = [_rec(route="open")] + [_rec(route="program_scoped")] * 3
+        assert [row["route"] for row in route_breakdown(records)] == ["program_scoped", "open"]
+
+    def test_route_breakdown_excludes_records_with_no_route(self):
+        # Pre-2026-08-08 records would otherwise form the biggest row in any window spanning
+        # the change, and an "unknown" row that large says nothing.
+        assert route_breakdown([_old_rec(), _old_rec()]) == []
+
+    def test_language_and_cache_breakdowns(self):
+        records = [
+            _rec(language="id", cache="hit"),
+            _rec(language="id", cache="miss"),
+            _rec(language="en", cache="rejected"),
+            _old_rec(),  # carries neither field
+        ]
+        assert language_breakdown(records) == [("id", 2), ("en", 1)]
+        # Fixed hit -> rejected -> miss order, not count order: reading a cache column means
+        # comparing the same positions between two runs.
+        assert cache_breakdown(records) == [("hit", 1), ("rejected", 1), ("miss", 1)]
 
     def test_top_programs_aggregates_across_matched_lists(self):
         records = [
@@ -181,8 +267,9 @@ class TestBuildAndFormatReport:
     def test_build_report_has_all_sections(self):
         report = build_report([_rec(fallback=True, query="Nursing?")], top=15)
         assert set(report) == {
-            "summary", "by_query_type", "top_programs", "top_fallback_queries",
-            "unresolved_terms", "response_coverage", "cited_sources",
+            "summary", "by_query_type", "by_route", "by_language", "by_cache",
+            "top_programs", "top_fallback_queries", "unresolved_terms",
+            "response_coverage", "cited_sources",
         }
 
     def test_format_report_is_text_and_mentions_key_numbers(self):
@@ -237,7 +324,12 @@ class TestResponseLogging:
 
 
 class TestLoadRecords:
-    def test_parses_jsonl_and_skips_blank_and_corrupt_lines(self, tmp_path):
+    """The log holds two record formats: compact one-per-line (everything written before
+    2026-08-08) and pretty-printed multi-line (everything since). Both must parse from the same
+    file, since the 667 compact records are the source of eval.py's in_scope_traffic questions
+    and are not going to be rewritten."""
+
+    def test_parses_compact_records_and_skips_blank_and_corrupt_lines(self, tmp_path):
         p = tmp_path / "log.jsonl"
         p.write_text(
             '{"query": "a", "fallback": false}\n'
@@ -248,3 +340,49 @@ class TestLoadRecords:
         )
         records = load_records(p)
         assert [r["query"] for r in records] == ["a", "b"]
+
+    def test_parses_pretty_printed_records(self, tmp_path):
+        p = tmp_path / "log.jsonl"
+        p.write_text(
+            '{\n  "query": "a",\n  "matched_programs": [\n    "Computer Science"\n  ],\n'
+            '  "fallback": false\n}\n'
+            '{\n  "query": "b",\n  "fallback": true\n}\n',
+            encoding="utf-8",
+        )
+        records = load_records(p)
+        assert [r["query"] for r in records] == ["a", "b"]
+        assert records[0]["matched_programs"] == ["Computer Science"]
+
+    def test_parses_a_file_holding_both_formats(self, tmp_path):
+        # What the real log looks like from 2026-08-08 on: old compact rows, then new ones.
+        p = tmp_path / "log.jsonl"
+        p.write_text(
+            '{"query": "old", "fallback": false}\n'
+            '{\n  "query": "new",\n  "route": "open",\n  "fallback": true\n}\n',
+            encoding="utf-8",
+        )
+        assert [r["query"] for r in load_records(p)] == ["old", "new"]
+
+    def test_a_truncated_final_record_does_not_lose_the_rest(self, tmp_path):
+        # A crash mid-append leaves a half-written object. Recovery resyncs on the next "{" at
+        # column 0, which is a record boundary in both formats and, since JSON escapes newlines
+        # inside strings, can never occur inside one.
+        p = tmp_path / "log.jsonl"
+        p.write_text(
+            '{\n  "query": "a",\n  "fallback": false\n}\n'
+            '{\n  "query": "trunc",\n  "resp'          # cut off mid-string
+            '\n{\n  "query": "c",\n  "fallback": true\n}\n',
+            encoding="utf-8",
+        )
+        assert [r["query"] for r in load_records(p)] == ["a", "c"]
+
+    def test_non_object_json_is_ignored(self, tmp_path):
+        # Guards the aggregation functions, which all call .get() on each record.
+        p = tmp_path / "log.jsonl"
+        p.write_text('[1, 2]\n"a string"\n{"query": "a", "fallback": false}\n', encoding="utf-8")
+        assert [r["query"] for r in load_records(p)] == ["a"]
+
+    def test_empty_file_yields_no_records(self, tmp_path):
+        p = tmp_path / "log.jsonl"
+        p.write_text("", encoding="utf-8")
+        assert load_records(p) == []

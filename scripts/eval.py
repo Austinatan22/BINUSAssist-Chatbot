@@ -438,6 +438,9 @@ async def run_one(service: ChatService, entry: dict) -> dict:
             "rewrite_triggered": None,
             "is_comparison": None,
             "query_type": None,
+            "route": None,
+            "node_count": None,
+            "plan_ms": None,
             "first_token_latency_s": None,
             "total_latency_s": round(time.perf_counter() - t0, 3),
             "fallback_triggered": False,
@@ -472,9 +475,16 @@ async def run_one(service: ChatService, entry: dict) -> dict:
         "is_comparison": is_comparison,
         "query_type": log_capture.get("query_type"),  # richer than the old bool: single/
         # comparison/clarification_campus/clarification_program/budget_exceeded/cache_hit/smalltalk
-        # first_token_latency includes retrieval (it all happens inside stream() before token 1);
-        # the retrieval-vs-generation split the old hand-rolled path exposed isn't separable through
-        # the public stream, so a separate generation-latency figure is no longer reported.
+        # Which branch of _route_retrieval answered (chat_service._ROUTES). query_type says how
+        # many programs were named, which is a different question -- a tuition query names one
+        # program and is logged "comparison" because it renders as a table. Grouping a run by
+        # route is what tells you whether a slow or fallback-prone category is one branch's fault.
+        "route": log_capture.get("route"),
+        "node_count": log_capture.get("node_count"),
+        # first_token_latency includes retrieval (it all happens inside stream() before token 1).
+        # plan_ms is ChatService's own measurement of that retrieval+routing portion, so the two
+        # together give the retrieval-vs-generation split without a bespoke harness.
+        "plan_ms": log_capture.get("plan_ms"),
         "first_token_latency_s": round(first_token_latency, 3) if first_token_latency else None,
         "total_latency_s": round(total_latency, 3),
         "fallback_triggered": fallback_triggered,
@@ -599,6 +609,24 @@ async def main() -> None:
           "— confirms the archival decision took effect, target 100%")
     print(f"Conversational/comparison questions ({len(manual_review)}): no automatic check — "
           "read these in the output file yourself.")
+
+    # Per-route table. The summary above is organized by question category (what we asked); this
+    # is organized by branch (how the pipeline answered), which is the only view that shows a
+    # branch systematically needing the rewrite retry to rescue it. A route whose first
+    # retrieval is aimed at the wrong sources looks fine per-category as long as the retry
+    # recovers -- it just costs an extra LLM call and second retrieval pass every time.
+    routed = [r for r in results if r.get("route")]
+    if routed:
+        print(f"\n--- By retrieval route ({len(routed)}/{len(results)} routed) ---")
+        print(f"  {'n':>4} {'fallback':>9} {'rewrite':>8} {'ttft p50':>9}  route")
+        for route in sorted({r["route"] for r in routed}):
+            rows = [r for r in routed if r["route"] == route]
+            ttfts = sorted(r["first_token_latency_s"] for r in rows
+                           if r["first_token_latency_s"] is not None)
+            p50 = f"{ttfts[len(ttfts) // 2]:.2f}s" if ttfts else "-"
+            rewrites = sum(1 for r in rows if r.get("rewrite_triggered"))
+            print(f"  {len(rows):4} {sum(1 for r in rows if r['fallback_triggered']):9} "
+                  f"{rewrites:8} {p50:>9}  {route}")
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_path = Path(__file__).resolve().parent.parent / f"eval_results_{timestamp}.json"

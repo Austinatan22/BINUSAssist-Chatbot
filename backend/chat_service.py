@@ -90,6 +90,22 @@ _WHO_TEACHES_GATE = 0.25
 # -- deterministic backstop, since the prompt's "at most 3" alone doesn't hold on this model.
 _WHO_TEACHES_MAX_LECTURERS = 3
 
+# Every value Plan.route can take, i.e. every branch of _route_retrieval that can produce
+# nodes, in the order the routing checks them. Logged per turn (see _log_query) and asserted
+# exhaustive by tests/test_chat_service.py, so a new branch cannot be added without either
+# labelling it or failing a test. Order matters for reading the analytics report, not for
+# behaviour.
+_ROUTES = (
+    "faculty_who_teaches",  # "who teaches X" -> faculty roster only
+    "faculty_leadership",   # "who is the head of X / dean" -> same roster, uncapped
+    "campus_programs",      # "what programs are at campus X" -> that campus's admission page
+    "comparison",           # 2-3 named programs -> each program's own document, balanced
+    "tuition_campuses",     # 1 named program + tuition aspect -> every campus's fee row
+    "program_scoped",       # exactly 1 named program -> that program's document
+    "out_of_catalog",       # names a program the KB doesn't have -> deliberate empty
+    "open",                 # nothing named -> unscoped hybrid retrieval
+)
+
 
 @dataclass
 class Plan:
@@ -130,20 +146,65 @@ class Plan:
     # 2026-08-07, when the retry was wrongly ruled out as a latency suspect because the eval
     # showed "0/66 rewrites" for a step that was in fact firing on most fallbacks.
     rewrite_triggered: bool = False
+    # The paraphrases rewrite_query actually produced, [] when the retry didn't fire. Knowing
+    # THAT it fired says how much a turn cost; knowing what it rewrote to is what says whether
+    # it was worth it, and the rewrite is an LLM call whose output is otherwise unrecoverable.
+    rewrite_queries: list[str] = field(default_factory=list)
+    # Which branch of _route_retrieval produced plan.nodes -- see _ROUTES for the values.
+    # query_type ("single"/"comparison") describes how many programs were named, which is a
+    # different question: a tuition query names one program and is logged "comparison" because
+    # it renders as a table. Reconstructing the branch from matched_programs + is_comparison +
+    # who_teaches is guesswork, and it was guesswork done by hand repeatedly while tracing the
+    # 2026-08-07 latency work. None -> no routing ran (no index loaded).
+    route: str | None = None
     # Semantic-cache bookkeeping -- non-None only for a fresh (no-history) turn with an
     # index loaded, i.e. the states where caching applies.
     cache_embedding: object | None = None
     cache_language: str | None = None
     # The trusted cache entry to replay, or None to run generation normally.
     cache_hit: dict | None = None
+    # "hit" / "rejected" / "miss", or None when caching didn't apply to this turn (history
+    # present, or no index). A rejection is the interesting one: it means the embedding was
+    # close enough but a deterministic gate vetoed the replay, and until now it existed only
+    # as a SEMANTIC_CACHE_REJECTED line in the app log, which nothing aggregates.
+    cache_state: str | None = None
 
 
 def _log_query(entry: dict) -> None:
     """Appends one record to query_log.jsonl (IMPROVEMENTS.md #6.1) -- the only place that
-    captures what people actually ask in production: the query, retrieval confidence,
-    latency, and -- most valuably -- whether it fell back."""
+    captures what people actually ask in production: the query, which branch answered it,
+    retrieval confidence, time-to-first-token, and -- most valuably -- whether it fell back.
+
+    Records are pretty-printed over several lines rather than crammed onto one. The file is
+    read by hand at least as often as by scripts/log_analytics.py, and a single record can run
+    past 1,500 characters once `response_sources` lists ten campus tuition URLs, which is
+    unreadable in an editor without soft wrap. The file is therefore a stream of concatenated
+    JSON objects, no longer strictly one-object-per-line despite the .jsonl name -- kept
+    because renaming would orphan the existing log, and the 667 records already in it are the
+    source of scripts/eval.py's in_scope_traffic questions. log_analytics.load_records scans
+    with raw_decode rather than splitting on newlines, so old compact records and new
+    pretty-printed ones parse from the same file.
+
+    Two consequences worth knowing: `grep '"fallback": true' query_log.jsonl` no longer prints
+    the whole record (use `grep -A2 -B12`, or log_analytics), and ensure_ascii=False means
+    Indonesian text is stored as itself instead of \\uXXXX escapes.
+    """
     with open(settings.query_log_path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(entry) + "\n")
+        f.write(json.dumps(entry, indent=2, ensure_ascii=False) + "\n")
+
+
+def _log_entry(message: str, query_type: str, history: list[dict], **extra) -> dict:
+    """The fields every query-log record carries, in the order a human reads them: when, what
+    was asked, how it was handled, then the bulky diagnostics. Key order is preserved by
+    json.dumps, so this is what puts `timestamp`/`query`/`query_type` at the top of a record
+    instead of wherever the code happened to assign them."""
+    return {
+        "timestamp": _now(),
+        "query": message,
+        "query_type": query_type,
+        "history_turns": len(history),
+        **extra,
+    }
 
 
 class ChatService:
@@ -160,15 +221,18 @@ class ChatService:
         """Public entry point: yields SSE events for one chat turn."""
         start = time.perf_counter()
 
+        # The three short-circuit paths below stream their reply through _log_after_stream, the
+        # same wrapper the main path uses, rather than calling _log_query directly before
+        # streaming. They used to do the latter, which made `latency_ms` mean two different
+        # things in one file (pre-stream here, post-stream everywhere else) and silently
+        # dragged down log_analytics' p50 -- a smalltalk turn was recorded as ~1ms because the
+        # streaming it excluded is nearly all of its cost. One wrapper also means these paths
+        # get ttft_ms and response capture for free instead of being permanent blind spots.
         if is_smalltalk(message):
-            _log_query({
-                "timestamp": _now(),
-                "query": message,
-                "query_type": "smalltalk",
-                "fallback": False,
-                "latency_ms": _elapsed_ms(start),
-            })
-            async for event in stream_smalltalk_reply(message):
+            entry = _log_entry(message, "smalltalk", history, fallback=False)
+            async for event in self._log_after_stream(
+                stream_smalltalk_reply(message), entry, start
+            ):
                 yield event
             return
 
@@ -177,14 +241,10 @@ class ChatService:
         # prompt and context can never be echoed back (see is_prompt_extraction_attempt).
         if is_prompt_extraction_attempt(message):
             logger.warning("PROMPT_EXTRACTION_BLOCKED query=%r", message)
-            _log_query({
-                "timestamp": _now(),
-                "query": message,
-                "query_type": "blocked_prompt_extraction",
-                "fallback": True,
-                "latency_ms": _elapsed_ms(start),
-            })
-            async for event in stream_prompt_extraction_refusal(message):
+            entry = _log_entry(message, "blocked_prompt_extraction", history, fallback=True)
+            async for event in self._log_after_stream(
+                stream_prompt_extraction_refusal(message), entry, start
+            ):
                 yield event
             return
 
@@ -193,37 +253,51 @@ class ChatService:
         else:
             # No index loaded -> nothing to retrieve; generation will emit the fallback.
             plan = Plan(standalone_query=message)
+        # Everything before the first generated token: condense, cache lookup, classification
+        # and retrieval. Logged separately from ttft_ms so a slow turn can be attributed
+        # without a bespoke harness -- plan_ms is ours to fix, ttft_ms - plan_ms is the LLM
+        # provider's. Reconstructing that split is what repeat_latency.py existed to do.
+        plan_ms = _elapsed_ms(start)
 
         if plan.cache_hit is not None:
-            _log_query({
-                "timestamp": _now(),
-                "query": message,
-                "standalone_query": plan.standalone_query,
-                "query_type": "cache_hit",
-                "matched_programs": plan.matched_programs,
-                "fallback": False,
-                "history_turns": len(history),
-                "latency_ms": _elapsed_ms(start),
-            })
-            async for event in stream_cached_answer(
+            entry = _log_entry(
+                message, "cache_hit", history,
+                standalone_query=plan.standalone_query,
+                language=plan.cache_language,
+                matched_programs=plan.matched_programs,
+                aspects=sorted(plan.aspects),
+                cache="hit",
+                fallback=False,
+                plan_ms=plan_ms,
+            )
+            cached = stream_cached_answer(
                 plan.cache_hit["answer"], plan.cache_hit["sources"],
                 is_fallback=plan.cache_hit.get("is_fallback", False),
                 follow_ups=plan.cache_hit.get("follow_ups", []),
-            ):
+            )
+            async for event in self._log_after_stream(cached, entry, start):
                 yield event
             return
 
-        log_entry = {
-            "timestamp": _now(),
-            "query": message,
-            "standalone_query": plan.standalone_query,
-            "query_type": "comparison" if plan.is_comparison else "single",
-            "matched_programs": plan.matched_programs,
-            "top_score": float(plan.nodes[0].score) if plan.nodes else None,
-            "fallback": not plan.nodes,
-            "rewrite_triggered": plan.rewrite_triggered,
-            "history_turns": len(history),
-        }
+        log_entry = _log_entry(
+            message, "comparison" if plan.is_comparison else "single", history,
+            standalone_query=plan.standalone_query,
+            language=plan.cache_language or detect_language(plan.standalone_query),
+            route=plan.route,
+            matched_programs=plan.matched_programs,
+            aspects=sorted(plan.aspects),
+            top_score=float(plan.nodes[0].score) if plan.nodes else None,
+            node_count=len(plan.nodes),
+            fallback=not plan.nodes,
+            cache=plan.cache_state,
+            rewrite_triggered=plan.rewrite_triggered,
+            plan_ms=plan_ms,
+        )
+        # Only when the retry actually fired, so the common record stays short. The paraphrases
+        # are the retry's only observable output -- an LLM call whose result is discarded once
+        # retrieval is done.
+        if plan.rewrite_queries:
+            log_entry["rewrite_queries"] = plan.rewrite_queries
 
         # "Ask, don't guess" (see _route_retrieval's tail): the query named a campus/
         # program we couldn't resolve, so ask which one rather than dead-ending. Checked
@@ -323,6 +397,7 @@ class ChatService:
                 standalone_query
             )
             cache_candidate = get_cache_candidate(plan.cache_embedding, plan.cache_language)
+            plan.cache_state = "miss" if cache_candidate is None else "rejected"
 
         # detect_named_programs is needed either way -- for the cache's entity gate, or
         # for routing below. When there's a cache candidate, compute it alone first (a
@@ -334,7 +409,10 @@ class ChatService:
             if is_safe_cache_hit(program_match.matched, aspects, cache_candidate):
                 logger.info("SEMANTIC_CACHE_HIT query=%r", standalone_query)
                 plan.cache_hit = cache_candidate
+                plan.cache_state = "hit"
                 return plan
+            # else: cache_state stays "rejected" -- an embedding-near candidate that a
+            # deterministic gate vetoed, which is the case worth counting.
             logger.info(
                 "SEMANTIC_CACHE_REJECTED query=%r candidate_programs=%r new_programs=%r",
                 standalone_query, cache_candidate["matched_programs"], program_match.matched,
@@ -385,6 +463,7 @@ class ChatService:
             campus = resolve_named_campus(plan.standalone_query, known_campus_names())
             campus_url = admission_requirement_url_for_campus(campus) if campus else None
             if campus_url:
+                plan.route = "campus_programs"
                 # retrieval_query, not standalone_query: it's alias-normalized (anggrek ->
                 # Kemanggisan), so the reranker scores the campus's program-list nodes against
                 # the campus's real name -- with the raw "anggrek" they fell below the gate and
@@ -405,6 +484,7 @@ class ChatService:
         named_unmatched = program_match.named_unmatched
 
         if len(matched) >= 2:
+            plan.route = "comparison"
             plan.is_comparison = True
             source_files = [program_catalog[p] for p in matched]
             # Retrieve each program's document with the bare attribute being compared
@@ -440,6 +520,7 @@ class ChatService:
             # against the program's own doc -- measured 0.265 raw vs 0.992 stripped. Stripping
             # is semantics-preserving (only scaffolding, never a topic word), so a genuinely
             # unanswerable in-scope question still scores low and falls back.
+            plan.route = "program_scoped"
             source_files = [program_catalog[matched[0]]]
 
             # Tuition first, catalog second. A program's own catalog cannot answer a
@@ -461,6 +542,7 @@ class ChatService:
                 if campus_nodes and campus_nodes[0].score >= gate:
                     # Same reasoning as the retry path: multiple campuses of one program is
                     # structurally a comparison, so reuse COMPARISON_NOTE's table format.
+                    plan.route = "tuition_campuses"
                     plan.is_comparison = True
                     plan.nodes = campus_nodes
                     return
@@ -489,6 +571,7 @@ class ChatService:
         elif named_unmatched:
             # Names a specific program not in the KB (e.g. "Information Systems") -- fall
             # back rather than let an open search surface a wrong-program chunk.
+            plan.route = "out_of_catalog"
             plan.nodes = []
         else:
             # Open retrieval. Retry with LLM-rewritten paraphrases if the first pass was
@@ -508,6 +591,7 @@ class ChatService:
             # this one, so they never reach this gate at all. A misspelled query that reaches
             # HERE (no literal match) is an out-of-catalog near-miss like "Data Enginering",
             # which must fall back regardless.
+            plan.route = "open"
             nodes = default_nodes
             # Vocabulary alone is not enough: "Cybr Security" and "kemanggisan" contain no
             # academic word yet are exactly the misspelling/alias cases the retry rescues.
@@ -580,6 +664,7 @@ class ChatService:
         extra_queries = await rewrite_query(query)
         if not extra_queries:
             return nodes, []
+        plan.rewrite_queries = extra_queries
         return await retrieve(extra_queries), extra_queries
 
     async def _route_faculty(self, plan) -> None:
@@ -589,6 +674,7 @@ class ChatService:
         and the same low-confidence rewrite retry as the program-scoped paths. A who-teaches
         query is then capped to a short "2-3 + others" list; a leadership query names one
         specific person, so it is NOT capped."""
+        plan.route = "faculty_leadership" if plan.leadership else "faculty_who_teaches"
         nodes = await retrieve_for_named_programs(
             self._index, self._reranker, plan.standalone_query, [FACULTY_ROSTER_URL],
             per_program_top_n=5,
@@ -703,19 +789,30 @@ class ChatService:
         )
 
     async def _log_after_stream(self, stream, entry: dict, start_time: float):
-        """Wraps the answer stream to record total latency (including the LLM call) into the
+        """Wraps the answer stream to record time-to-first-token and total latency into the
         query log once the stream completes, and -- when settings.log_responses is on -- the
         assistant's response too (answer text, truncated, plus the cited source files).
 
         This is the outermost stream wrapper (see stream()), so it observes every SSE event
         after any inner wrapper (_cache_after_stream) has passed it through. Capturing the
         response only matters when logging is enabled, so the token accumulation is guarded
-        to add nothing for the default (off) path beyond the loop that already runs."""
+        to add nothing for the default (off) path beyond the loop that already runs.
+
+        ttft_ms is the PRD §9 latency criterion (<3s for 90% of queries) and the log had no
+        column for it until now, only end-to-end latency_ms -- which includes the whole
+        generation and so answers a different, looser question. scripts/log_analytics.py said
+        as much in a comment and reported latency_ms "as context, not as the PRD metric
+        itself". A substring test rather than a JSON parse, and skipped entirely once the first
+        token has arrived, so nothing is added to the per-token path.
+        """
         capture = settings.log_responses
         answer_parts: list[str] = []
         sources: list = []
+        ttft_ms: int | None = None
         async for event in stream:
             yield event
+            if ttft_ms is None and event.startswith("data: ") and '"token"' in event:
+                ttft_ms = _elapsed_ms(start_time)
             if capture and event.startswith("data: "):
                 try:
                     data = json.loads(event[len("data: "):].strip())
@@ -725,6 +822,7 @@ class ChatService:
                     answer_parts.append(data.get("content", ""))
                 elif data.get("type") == "done":
                     sources = data.get("sources", [])
+        entry["ttft_ms"] = ttft_ms
         entry["latency_ms"] = _elapsed_ms(start_time)
         if capture:
             answer = "".join(answer_parts)

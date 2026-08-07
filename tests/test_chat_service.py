@@ -350,6 +350,16 @@ class TestRewriteTriggeredIsRecorded:
         # None would be indistinguishable from the old "unobservable" state in the log.
         assert Plan(standalone_query="q").rewrite_triggered is False
 
+    def test_the_paraphrases_themselves_are_recorded(self, monkeypatch):
+        # rewrite_query's output is otherwise unrecoverable once retrieval is done, and knowing
+        # THAT the retry fired doesn't say whether it was worth its cost.
+        plan = self._open_branch(monkeypatch, first_score=0.1)
+        assert plan.rewrite_queries == ["para"]
+
+    def test_no_paraphrases_recorded_when_the_retry_does_not_fire(self, monkeypatch):
+        plan = self._open_branch(monkeypatch, first_score=0.95)
+        assert plan.rewrite_queries == []
+
 
 class TestTuitionRoutedBeforeTheCatalog:
     """A program's own catalog cannot answer a tuition question -- it reranks 0.004 even
@@ -747,3 +757,209 @@ class TestWhoTeachesRouting:
         assert plan.nodes == []
         assert plan.unresolved_campus_mention is None
         assert plan.unresolved_program_mention is None
+
+
+class TestRouteIsLabelled:
+    """Plan.route names which branch of _route_retrieval produced the nodes. query_type can't
+    answer that -- it says how many programs were named, and the two disagree (a tuition query
+    names one program and is logged "comparison" because it renders as a table). Reconstructing
+    the branch from matched_programs + is_comparison + who_teaches is guesswork, and it was
+    guesswork done by hand repeatedly during the 2026-08-07 latency work."""
+
+    @staticmethod
+    def _route(monkeypatch, plan, matched=(), named_unmatched=False, catalog=None, nodes=None):
+        monkeypatch.setattr(chat_service, "is_budget_exceeded", lambda: False)
+        monkeypatch.setattr(chat_service, "known_campus_names", lambda: _ALL_CAMPUSES)
+        monkeypatch.setattr(chat_service, "rewrite_query", AsyncMock(return_value=[]))
+        monkeypatch.setattr(
+            chat_service, "retrieve_for_named_programs", AsyncMock(return_value=[_fake_node(0.9)])
+        )
+        monkeypatch.setattr(chat_service, "load_scraped_urls", lambda: [
+            "https://gabung.binus.ac.id/tuition-fee/?campus-location=binus-medan",
+        ])
+        monkeypatch.setattr(
+            chat_service, "admission_requirement_url_for_campus",
+            lambda campus: f"https://example.com/{campus}",
+        )
+        asyncio.run(_service()._route_retrieval(
+            plan, SimpleNamespace(matched=list(matched), named_unmatched=named_unmatched),
+            catalog or {p: f"{p}.pdf" for p in _CATALOG},
+            nodes if nodes is not None else [_fake_node(0.9)],
+            plan.standalone_query,
+        ))
+        return plan.route
+
+    def test_who_teaches_and_leadership_are_distinct_routes(self, monkeypatch):
+        assert self._route(monkeypatch, Plan(
+            standalone_query="Who teaches Computer Science?", who_teaches=True,
+            program_names=_CATALOG,
+        )) == "faculty_who_teaches"
+        assert self._route(monkeypatch, Plan(
+            standalone_query="Siapa kepala program Computer Science?", leadership=True,
+            program_names=_CATALOG,
+        )) == "faculty_leadership"
+
+    def test_campus_programs(self, monkeypatch):
+        assert self._route(monkeypatch, Plan(
+            standalone_query="What programs are offered at Kemanggisan?", program_names=_CATALOG,
+        )) == "campus_programs"
+
+    def test_comparison(self, monkeypatch):
+        assert self._route(
+            monkeypatch,
+            Plan(standalone_query="Compare Computer Science and Data Science",
+                 program_names=_CATALOG),
+            matched=["Computer Science", "Data Science"],
+        ) == "comparison"
+
+    def test_tuition_bypasses_program_scoped(self, monkeypatch):
+        # The route is what makes the tuition bypass visible: query_type says "comparison" and
+        # matched_programs says one program, which reads exactly like a mis-labelled record.
+        assert self._route(
+            monkeypatch,
+            Plan(standalone_query="Berapa biaya kuliah Computer Science?", aspects={"tuition"},
+                 program_names=_CATALOG),
+            matched=["Computer Science"],
+        ) == "tuition_campuses"
+
+    def test_program_scoped(self, monkeypatch):
+        assert self._route(
+            monkeypatch,
+            Plan(standalone_query="What does the Computer Science curriculum cover?",
+                 program_names=_CATALOG),
+            matched=["Computer Science"],
+        ) == "program_scoped"
+
+    def test_out_of_catalog(self, monkeypatch):
+        assert self._route(
+            monkeypatch,
+            Plan(standalone_query="Tell me about Information Systems", program_names=_CATALOG),
+            named_unmatched=True,
+        ) == "out_of_catalog"
+
+    def test_open(self, monkeypatch):
+        assert self._route(monkeypatch, Plan(
+            standalone_query="what scholarships are available", program_names=_CATALOG,
+        )) == "open"
+
+    def test_none_when_no_routing_ran(self):
+        # stream() builds a bare Plan when no index is loaded; None must not be reported as a
+        # route, since the analytics report excludes unrouted records rather than inventing one.
+        assert Plan(standalone_query="q").route is None
+
+    def test_every_route_the_code_can_produce_is_in_the_documented_set(self, monkeypatch):
+        # _ROUTES is what log_analytics' BY ROUTE column is read against, so a new branch that
+        # forgets to label itself, or labels itself with a typo, must fail here rather than show
+        # up as a silently-excluded record.
+        produced = {
+            self._route(monkeypatch, Plan(standalone_query=q, program_names=_CATALOG, **kw),
+                        matched=matched, named_unmatched=nu)
+            for q, kw, matched, nu in [
+                ("Who teaches CS?", {"who_teaches": True}, [], False),
+                ("Siapa kepala CS?", {"leadership": True}, [], False),
+                ("What programs are at Kemanggisan?", {}, [], False),
+                ("Compare CS and DS", {}, ["Computer Science", "Data Science"], False),
+                ("Berapa biaya CS?", {"aspects": {"tuition"}}, ["Computer Science"], False),
+                ("CS curriculum?", {}, ["Computer Science"], False),
+                ("Tell me about Information Systems", {}, [], True),
+                ("what scholarships are available", {}, [], False),
+            ]
+        }
+        assert produced == set(chat_service._ROUTES)
+
+
+class TestQueryLogRecordShape:
+    """What _log_query writes has to be what scripts/log_analytics.load_records reads back.
+    Records are pretty-printed over several lines as of 2026-08-08 (a record citing ten campus
+    tuition URLs runs past 1,500 characters, which is unreadable in an editor), so the two sides
+    no longer agree by the trivial fact of one-record-per-line."""
+
+    def test_a_written_record_round_trips_through_the_analytics_loader(self, monkeypatch, tmp_path):
+        from scripts.log_analytics import load_records
+
+        log = tmp_path / "query_log.jsonl"
+        monkeypatch.setattr(chat_service.settings, "query_log_path", log)
+        written = [
+            chat_service._log_entry(
+                "Berapa biaya kuliah Computer Science?", "comparison", [],
+                route="tuition_campuses", language="id", fallback=False,
+                matched_programs=["Computer Science"], ttft_ms=2015,
+            ),
+            chat_service._log_entry("What is the capital of France?", "single", [],
+                                    route="open", language="en", fallback=True, ttft_ms=1048),
+        ]
+        for entry in written:
+            chat_service._log_query(entry)
+
+        assert load_records(log) == written
+
+    def test_records_are_multi_line_and_indonesian_text_is_not_escaped(self, monkeypatch, tmp_path):
+        log = tmp_path / "query_log.jsonl"
+        monkeypatch.setattr(chat_service.settings, "query_log_path", log)
+        chat_service._log_query(
+            chat_service._log_entry("Berapa biaya kuliah Teknik Informatika?", "single", [])
+        )
+        text = log.read_text(encoding="utf-8")
+        assert text.count("\n") > 1                     # pretty-printed, not one line
+        assert "Teknik Informatika" in text              # ensure_ascii=False, no escapes
+        assert "\\u" not in text
+
+    def test_the_readable_fields_come_first(self, monkeypatch, tmp_path):
+        # Key order is the whole point of _log_entry: `response`, which can be 2,000 characters,
+        # must not sit between `query` and `fallback` when someone opens the file.
+        log = tmp_path / "query_log.jsonl"
+        monkeypatch.setattr(chat_service.settings, "query_log_path", log)
+        entry = chat_service._log_entry("q", "single", [], fallback=False)
+        entry["response"] = "a long answer"
+        entry["latency_ms"] = 1500
+        chat_service._log_query(entry)
+        keys = [line.split(chr(34))[1] for line in log.read_text(encoding="utf-8").splitlines()
+                if line.startswith('  "')]
+        assert keys[:3] == ["timestamp", "query", "query_type"]
+        assert keys.index("response") > keys.index("fallback")
+
+
+class TestTimeToFirstToken:
+    """ttft_ms is the PRD's actual latency criterion (<3s for 90% of queries). The log carried
+    only end-to-end latency_ms, which includes the whole generation and so answers a looser
+    question -- log_analytics said so in a comment and reported it "as context, not as the PRD
+    metric itself"."""
+
+    @staticmethod
+    def _drive(monkeypatch, events):
+        async def gen():
+            for e in events:
+                yield e
+
+        logged = []
+        monkeypatch.setattr(chat_service, "_log_query", lambda entry: logged.append(entry))
+        monkeypatch.setattr(chat_service.settings, "log_responses", False)
+        asyncio.run(_collect(_service()._log_after_stream(gen(), {"query": "q"}, 0.0)))
+        return logged[0]
+
+    def test_recorded_at_the_first_token_not_the_last(self, monkeypatch):
+        entry = self._drive(monkeypatch, [
+            'data: {"type": "token", "content": "a"}\n\n',
+            'data: {"type": "token", "content": "b"}\n\n',
+            'data: {"type": "done", "sources": [], "fallback": false}\n\n',
+        ])
+        assert entry["ttft_ms"] is not None
+        assert entry["ttft_ms"] <= entry["latency_ms"]
+
+    def test_a_leading_non_token_event_does_not_count_as_the_first_token(self, monkeypatch):
+        # stream_answer can emit a non-token event first; ttft must mean the first TOKEN.
+        entry = self._drive(monkeypatch, [
+            'data: {"type": "sources", "sources": []}\n\n',
+            'data: {"type": "token", "content": "a"}\n\n',
+            'data: {"type": "done", "sources": [], "fallback": false}\n\n',
+        ])
+        assert entry["ttft_ms"] is not None
+
+    def test_none_when_no_token_was_ever_streamed(self, monkeypatch):
+        # A stream that dies before its first token has no TTFT. None keeps it out of the
+        # percentiles; 0 would silently improve them.
+        entry = self._drive(
+            monkeypatch, ['data: {"type": "done", "sources": [], "fallback": true}\n\n']
+        )
+        assert entry["ttft_ms"] is None
+        assert "latency_ms" in entry
