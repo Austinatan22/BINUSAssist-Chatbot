@@ -2,6 +2,7 @@ import asyncio
 import re
 from pathlib import Path
 
+import torch
 from llama_index.core import VectorStoreIndex
 from llama_index.core.postprocessor import SentenceTransformerRerank
 from llama_index.core.retrievers import QueryFusionRetriever
@@ -42,9 +43,25 @@ def build_reranker() -> SentenceTransformerRerank:
     if settings.reranker_device == "cuda":
         # fp32 weights for this 568M-param cross-encoder used ~4-4.5GB of VRAM; halving
         # precision cuts that roughly in half without a meaningful accuracy loss for reranking.
-        # In-place .half() only — reassigning the .model attribute triggers a CrossEncoder
+        # In-place .half() only -- reassigning the .model attribute triggers a CrossEncoder
         # property-setter side effect that breaks attention_mask handling (confirmed via repro).
         reranker._model.model.half()
+        # .half() frees the fp32 weights but torch keeps their blocks in its caching allocator,
+        # so the process goes on RESERVING the fp32 load spike for its whole lifetime even though
+        # it is using half of it. Measured on a 10GB card, with the embedder loaded too: reserved
+        # while serving 3770MB -> 3172MB, so 598MB goes back to the driver. Identical allocated
+        # memory (2174MB either way) and bit-identical rerank scores, since nothing about the
+        # model changes -- this only hands back cache.
+        #
+        # It does NOT lower the peak (3737MB): fp32 is still materialized during the load. Doing
+        # better would mean constructing the CrossEncoder in fp16 up front, and there is no way to
+        # reach that from here -- SentenceTransformerRerank takes no model_kwargs and CrossEncoder's
+        # dtype lives behind them. Building the fp16 model separately and swapping it in is worse,
+        # not better: SentenceTransformerRerank still loads its own fp32 copy in __init__, so the
+        # model ends up in memory twice (measured 3257MB allocated vs 1091MB for the approach
+        # above). At 3.7GB peak on a 10GB card the spike is not worth contorting this for; holding
+        # it forever was the part worth fixing.
+        torch.cuda.empty_cache()
     return reranker
 
 
