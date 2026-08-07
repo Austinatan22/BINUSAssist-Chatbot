@@ -298,6 +298,74 @@ ARCHIVED_BORDERLINE_QUESTIONS = [
 ]
 
 
+# Real questions taken verbatim from query_log.jsonl, added 2026-08-08 to reach the PRD's
+# "50 test questions" for answer relevance (IN_SCOPE_QUESTIONS alone is 20). Kept as a
+# SEPARATE list, and under its own category, for two reasons:
+#
+#   1. IN_SCOPE_QUESTIONS is the fixed benchmark every historical eval run was measured
+#      against. Folding these in would silently break comparability with those runs -- the
+#      2026-08-07 latency A/B was only valid because the set was byte-identical either side.
+#   2. These are traffic, so they answer a different question: does the bot handle what
+#      people ACTUALLY ask, versus does it still pass a curated bar.
+#
+# Selection rules, so this stays reproducible when it is next extended:
+#   - Excluded the 2026-08-06 rows entirely; those are synthetic probes from a debugging
+#     session, not users.
+#   - Deduplicated case-insensitively (565 rows -> 265 uniques), then chose from the ones
+#     the pipeline currently ANSWERS. A question that already falls back has no answer text
+#     to grade for relevance, and marking it should_not_fallback would assert KB coverage
+#     that has not been confirmed.
+#   - Weighted toward what IN_SCOPE_QUESTIONS does not touch at all: tuition, credits/SKS,
+#     per-semester course lists, faculty and leadership, campus program lists, admissions,
+#     scholarships, accreditation. The curated 20 are three question shapes (career
+#     prospects / curriculum / learning outcomes) crossed with programs and two languages.
+#   - Covers the programs added by KB Tasks 4 and 5 (CS International, the @campus variants,
+#     Master, Doctor), which the curated set predates and still does not test.
+#   - Kept two genuinely misspelled queries verbatim ("como sci", "student outcoes for datas
+#     science prorgam"). Typos are the failure class that keeps recurring, and a cleaned-up
+#     eval set is exactly the one that would not have caught the 2026-08-07 tuition bug.
+IN_SCOPE_TRAFFIC_QUESTIONS = [
+    # -- tuition (no coverage in the curated 20) --
+    ("Berapa biaya kuliah program CS di Kemanggisan?", "in_scope_traffic"),
+    ("How much is the first-semester tuition for Computer Science at BINUS?", "in_scope_traffic"),
+    ("What are the tuition fees for Computer Science Global Class?", "in_scope_traffic"),
+    ("berapa harga jurusan computer science", "in_scope_traffic"),
+    # -- credits, SKS, per-semester course lists --
+    ("How many total credits does the Computer Science program require?", "in_scope_traffic"),
+    ("berapa sks Grafika Komputer di computer science", "in_scope_traffic"),
+    ("Sebutkan mata kuliah di jurusan cs pada semester 1", "in_scope_traffic"),
+    ("what it the courses for 3rd semester in cyber security program?", "in_scope_traffic"),
+    ("List the courses in the Data Science curriculum.", "in_scope_traffic"),
+    # -- faculty and leadership (KB Tasks 1-3; no coverage in the curated 20) --
+    ("Siapa yang mengajar Machine Learning di BINUS?", "in_scope_traffic"),
+    ("Who is the head of the Computer Science program?", "in_scope_traffic"),
+    ("Siapa kepala program Artificial Intelligence?", "in_scope_traffic"),
+    ("Siapa saja dosen Computer Science di kampus Bandung?", "in_scope_traffic"),
+    ("Mata kuliah apa yang diajar oleh Diaz Santika?", "in_scope_traffic"),
+    # -- campus and program enumeration --
+    ("Di kampus mana saja ada Computer Science?", "in_scope_traffic"),
+    ("program apa saja di binus kemanggisan", "in_scope_traffic"),
+    ("what undergraduate programs does the School of Computer Science offer", "in_scope_traffic"),
+    # -- admissions and scholarships (scraped gabung.binus.ac.id pages) --
+    ("How do I apply to BINUS? What are the steps?", "in_scope_traffic"),
+    ("Bagaimana cara mendapatkan beasiswa di BINUS?", "in_scope_traffic"),
+    ("What scholarships does BINUS offer?", "in_scope_traffic"),
+    ("Apa itu StarTech Scholarship?", "in_scope_traffic"),
+    ("Is there an entrance exam for Computer Science?", "in_scope_traffic"),
+    # -- programs added by KB Tasks 4/5, untested by the curated set --
+    ("What are the career prospects for Computer Science International graduates?", "in_scope_traffic"),
+    ("Ceritakan tentang Computer Science @Medan", "in_scope_traffic"),
+    ("What is Computer Science @Bandung?", "in_scope_traffic"),
+    ("Tell me about the Master of Computer Science program", "in_scope_traffic"),
+    ("What is the Doctor of Computer Science / S3 program?", "in_scope_traffic"),
+    # -- accreditation --
+    ("Is the Computer Science program accredited? By whom?", "in_scope_traffic"),
+    # -- misspelled, kept verbatim on purpose (see selection rules above) --
+    ("what are the student outcoes for datas science prorgam?", "in_scope_traffic"),
+    ("Berapa harga jurusan como sci", "in_scope_traffic"),
+]
+
+
 def _normalize(entries: list, default_expectation: str) -> list[dict]:
     """IN_SCOPE_QUESTIONS/OUT_OF_SCOPE_QUESTIONS are plain (question, category) tuples --
     wrap them in the same dict shape as EDGE_CASE_QUESTIONS so run_one() has one input
@@ -307,6 +375,7 @@ def _normalize(entries: list, default_expectation: str) -> list[dict]:
 
 ALL_QUESTIONS = (
     _normalize(IN_SCOPE_QUESTIONS, "should_not_fallback")
+    + _normalize(IN_SCOPE_TRAFFIC_QUESTIONS, "should_not_fallback")
     + _normalize(OUT_OF_SCOPE_QUESTIONS, "should_fallback")
     + EDGE_CASE_QUESTIONS
     + OTHER_SCHOOL_PROGRAM_QUESTIONS
@@ -464,6 +533,14 @@ async def main() -> None:
     in_scope = [r for r in results if r["category"] == "in_scope"]
     false_fallbacks = sum(1 for r in in_scope if r["fallback_triggered"])
 
+    # The PRD's relevance metric is graded over both in-scope sets (20 curated + 30 traffic
+    # = the "50 test questions" it asks for). Reported separately from `in_scope` above so
+    # the benchmark figure stays comparable with every prior run.
+    traffic = [r for r in results if r["category"] == "in_scope_traffic"]
+    traffic_false_fallbacks = sum(1 for r in traffic if r["fallback_triggered"])
+    gradeable = [r for r in (in_scope + traffic) if not r["fallback_triggered"]]
+    with_sources = [r for r in gradeable if r["num_sources"]]
+
     latencies = [r["first_token_latency_s"] for r in results if r["first_token_latency_s"] is not None]
     under_3s = sum(1 for t in latencies if t < 3.0)
     latency_pct = under_3s / len(latencies) if latencies else 0.0
@@ -495,7 +572,11 @@ async def main() -> None:
     print(f"Fallback accuracy (out-of-scope correctly fell back): {fallback_correct}/{len(out_of_scope)} "
           f"({fallback_accuracy:.0%}) — PRD target >90%")
     print(f"False fallbacks (in-scope incorrectly fell back): {false_fallbacks}/{len(in_scope)}")
+    print(f"False fallbacks (real-traffic in-scope): {traffic_false_fallbacks}/{len(traffic)}")
     print(f"First-token latency < 3s: {under_3s}/{len(latencies)} ({latency_pct:.0%}) — PRD target 90%")
+    print(f"Relevance grading pool: {len(gradeable)}/{len(in_scope) + len(traffic)} answered "
+          f"(PRD asks for 50 test questions); {len(with_sources)} carry sources for the "
+          "retrieval-precision spot-check (PRD asks for 30)")
     print("Answer relevance and retrieval precision require manual grading — see the output file below.")
     print(f"\nAdversarial (prompt injection / system-prompt leak): {leaks}/{len(adversarial)} leaked "
           "— target 0")
@@ -516,10 +597,13 @@ async def main() -> None:
     out_path = Path(__file__).resolve().parent.parent / f"eval_results_{timestamp}.json"
     out_path.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nFull results written to {out_path}")
-    print("To grade manually: open the file, set \"relevant\": 1 or 0 on each in_scope row "
-          "after reading the answer/sources, then compute the % >80% (relevance) "
-          "and spot-check top-5 sources per query for >70% (retrieval precision). Also read "
-          "through the \"conversational\"/\"comparison\" rows -- those have no automatic check.")
+    print("To grade manually: open the file and set \"relevant\": 1 or 0 on every "
+          "\"in_scope\" and \"in_scope_traffic\" row after reading its answer/sources -- those "
+          "two categories together are the PRD's 50 test questions. Then compute the % (PRD "
+          "target >80%), and spot-check the top-5 sources on 30 of them for retrieval "
+          "precision (>70%). Rows already fallback_triggered need no grade; they are counted "
+          "as false fallbacks above. Also read the \"conversational\"/\"comparison\" rows -- "
+          "those have no automatic check.")
 
 
 if __name__ == "__main__":

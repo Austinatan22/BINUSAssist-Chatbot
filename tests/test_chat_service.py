@@ -199,7 +199,30 @@ class TestParaphrasesReachTheSupplementaryRetry:
     computer science?" reranked 0.119 and fell back where the correct spelling scored
     0.709. Forwarding the same paraphrases takes it to 0.980, with no extra LLM call."""
 
-    def test_generic_retry_receives_the_paraphrases(self, monkeypatch):
+    def test_generic_retry_receives_the_paraphrases_when_the_original_fails(self, monkeypatch):
+        # The 1a7f009 case, unchanged: the ORIGINAL query is the problem (a transposed
+        # character collapsing the reranker to 0.119), so the paraphrases must still reach
+        # the widened source set and recover it.
+        service = _service()
+        monkeypatch.setattr(chat_service, "load_scraped_urls", lambda: ["https://example.com/a"])
+        # first attempt is original-only and lands below the gate; second clears it
+        mock_retrieve = AsyncMock(side_effect=[[_fake_node(0.119)], [_fake_node(0.98)]])
+        monkeypatch.setattr(chat_service, "retrieve_for_named_programs", mock_retrieve)
+
+        out = asyncio.run(service._retry_with_supplementary_sources(
+            _plan(aspects={"career"}), "q", [], ["cs.pdf"], ["rewritten q"],
+        ))
+
+        assert mock_retrieve.await_count == 2
+        assert mock_retrieve.await_args_list[0].kwargs.get("extra_queries") is None
+        assert mock_retrieve.await_args_list[1].kwargs["extra_queries"] == ["rewritten q"]
+        assert out[0].score == 0.98  # recovered, not fallen back
+
+    def test_paraphrases_are_not_paid_for_when_the_original_clears_the_gate(self, monkeypatch):
+        # Cost control. This retry runs over the widest source set in the pipeline, and
+        # retrieve_for_named_programs scales with sources x queries: 48 x 1 = 3.29s scoring
+        # 0.966, versus 48 x 4 = 16.21s scoring 0.995. Both clear the gate, so the extra
+        # legs are 13 seconds for 0.03 of headroom that changes no decision.
         service = _service()
         monkeypatch.setattr(chat_service, "load_scraped_urls", lambda: ["https://example.com/a"])
         mock_retrieve = AsyncMock(return_value=[_fake_node(0.8)])
@@ -209,7 +232,8 @@ class TestParaphrasesReachTheSupplementaryRetry:
             _plan(aspects={"career"}), "q", [], ["cs.pdf"], ["rewritten q"],
         ))
 
-        assert mock_retrieve.call_args.kwargs["extra_queries"] == ["rewritten q"]
+        assert mock_retrieve.await_count == 1
+        assert mock_retrieve.await_args.kwargs.get("extra_queries") is None
 
     def test_campus_balanced_retry_receives_the_paraphrases(self, monkeypatch):
         service = _service()
@@ -240,7 +264,8 @@ class TestParaphrasesReachTheSupplementaryRetry:
             _plan(aspects={"career"}), "q", [], ["cs.pdf"],
         ))
 
-        assert mock_retrieve.call_args.kwargs["extra_queries"] is None
+        assert mock_retrieve.await_count == 1
+        assert mock_retrieve.await_args.kwargs.get("extra_queries") is None
 
     @pytest.mark.parametrize("branch_programs", [["Computer Science"], ["Computer Science", "Data Science"]])
     def test_route_retrieval_hands_its_rewrite_down_to_the_supplementary_retry(
@@ -271,6 +296,59 @@ class TestParaphrasesReachTheSupplementaryRetry:
         mock_rewrite.assert_awaited_once()  # not paid for twice
         assert mock_supp.await_args.args[4] == ["biaya kuliah Computer Science"]
         assert plan.nodes  # recovered instead of falling back
+
+
+class TestTuitionRoutedBeforeTheCatalog:
+    """A program's own catalog cannot answer a tuition question -- it reranks 0.004 even
+    spelled correctly. The default order still retrieved it first, and the low score it
+    produced was what triggered the LLM rewrite, so every tuition query spent ~2-4s proving
+    a known fact before the supplementary retry reached the per-campus pages. Trying those
+    pages first is a reordering only: when they miss the gate the normal program-scoped path
+    runs untouched. Measured end to end: 11.27s -> 2.08s, still answering."""
+
+    @staticmethod
+    def _route(monkeypatch, aspects, campus_score, scoped_score=0.9):
+        monkeypatch.setattr(chat_service, "is_budget_exceeded", lambda: False)
+        monkeypatch.setattr(chat_service, "known_campus_names", lambda: _ALL_CAMPUSES)
+        monkeypatch.setattr(chat_service, "load_scraped_urls", lambda: [
+            "https://gabung.binus.ac.id/tuition-fee/?campus-location=binus-medan",
+        ])
+        monkeypatch.setattr(chat_service, "rewrite_query", AsyncMock(return_value=["para"]))
+        campus = AsyncMock(return_value=[_fake_node(campus_score)])
+        monkeypatch.setattr(ChatService, "_retry_tuition_across_campuses", campus)
+        scoped = AsyncMock(return_value=[_fake_node(scoped_score)])
+        monkeypatch.setattr(chat_service, "retrieve_for_named_programs", scoped)
+        monkeypatch.setattr(ChatService, "_retry_with_supplementary_sources",
+                            AsyncMock(side_effect=lambda p, q, n, s, e=None: n))
+        service = _service()
+        plan = Plan(standalone_query="berapa biaya kuliah computer science",
+                    program_names=_CATALOG, aspects=set(aspects))
+        program_match = SimpleNamespace(matched=["Computer Science"], named_unmatched=False)
+        asyncio.run(service._route_retrieval(
+            plan, program_match, {"Computer Science": "cs.pdf"}, [],
+            "berapa biaya kuliah computer science",
+        ))
+        return campus, scoped, plan
+
+    def test_tuition_query_skips_the_catalog_entirely(self, monkeypatch):
+        campus, scoped, plan = self._route(monkeypatch, {"tuition"}, campus_score=0.95)
+        campus.assert_awaited_once()
+        scoped.assert_not_awaited()       # the doomed 0.004 retrieval never happens
+        assert plan.nodes and plan.nodes[0].score == 0.95
+        assert plan.is_comparison is True  # per-campus rows render as a table
+
+    def test_falls_through_to_the_catalog_when_tuition_pages_miss(self, monkeypatch):
+        # Reordering, not a shortcut: a tuition-tagged query the tuition pages can't answer
+        # must still get the normal program-scoped path.
+        campus, scoped, plan = self._route(monkeypatch, {"tuition"}, campus_score=0.1)
+        campus.assert_awaited_once()
+        scoped.assert_awaited()
+        assert plan.nodes and plan.nodes[0].score == 0.9
+
+    def test_non_tuition_query_is_untouched(self, monkeypatch):
+        campus, scoped, plan = self._route(monkeypatch, {"career"}, campus_score=0.95)
+        campus.assert_not_awaited()
+        scoped.assert_awaited()
 
 
 class TestOpenBranchRewriteGate:

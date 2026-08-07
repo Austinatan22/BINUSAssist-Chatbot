@@ -432,6 +432,30 @@ class ChatService:
             # is semantics-preserving (only scaffolding, never a topic word), so a genuinely
             # unanswerable in-scope question still scores low and falls back.
             source_files = [program_catalog[matched[0]]]
+
+            # Tuition first, catalog second. A program's own catalog cannot answer a
+            # tuition question -- it reranks 0.004 even spelled correctly (see
+            # _retry_with_supplementary_sources' docstring) -- yet the default order pays
+            # for that doomed retrieval AND the LLM rewrite its low score triggers, every
+            # time, before the supplementary retry finally reaches the per-campus pages that
+            # hold the answer. Measured on "Berapa biaya kuliah program CS di Kemanggisan?":
+            # ~2-4s of the ~10s TTFT is spent proving what 1a7f009 already established.
+            #
+            # Purely a reordering: when the tuition pages don't clear the gate, the normal
+            # program-scoped path below runs untouched, so nothing that answers today stops
+            # answering. Single-program only, for the same reason the retry itself is
+            # (comparison mode can't tell which program a campus row belongs to).
+            if "tuition" in plan.aspects:
+                campus_nodes = await self._retry_tuition_across_campuses(
+                    retrieval_query, load_scraped_urls()
+                )
+                if campus_nodes and campus_nodes[0].score >= gate:
+                    # Same reasoning as the retry path: multiple campuses of one program is
+                    # structurally a comparison, so reuse COMPARISON_NOTE's table format.
+                    plan.is_comparison = True
+                    plan.nodes = campus_nodes
+                    return
+
             nodes = await retrieve_for_named_programs(
                 self._index, self._reranker, retrieval_query, source_files
             )
@@ -584,8 +608,35 @@ class ChatService:
                 plan.is_comparison = True
                 return campus_nodes
 
+        # Paraphrases last, not first. retrieve_for_named_programs builds one
+        # metadata-filtered retriever PER source file and runs every query against each, so
+        # cost scales with sources x queries -- and this is the widest source set in the
+        # pipeline (the program's own doc plus every scraped URL, 48 today). Measured on
+        # "Berapa biaya kuliah program CS di Kemanggisan?": 48 sources x 1 query = 3.29s
+        # scoring 0.966, versus 48 x 4 = 16.21s scoring 0.995. Both clear the 0.5 gate, so
+        # the paraphrase legs bought 0.03 of headroom for 13 seconds.
+        #
+        # They still run when the original query is the problem, which is the case they were
+        # forwarded here for: a one-character transposition collapses the reranker to 0.119
+        # (see the docstring above), and paraphrases take it back to 0.980. Gating them on
+        # the original having failed keeps that recovery intact and charges for it only when
+        # it is needed. Worst case (original fails, paraphrases also needed) is ~20% slower
+        # than before on a query that was already heading for a fallback.
+        # Narrowing this set by aspect (tuition -> only the tuition pages, etc.) was tried
+        # and reverted: measured 16.21s -> 4.86s in isolation with an identical top score,
+        # but no reproducible effect end to end, because tuition queries return early from
+        # _retry_tuition_across_campuses above and rarely reach this branch at all. The
+        # mapping table would have needed keeping in sync with the scraped URL families for
+        # a benefit that could not be demonstrated.
+        widened = source_files + supplementary
+
+        nodes = await retrieve_for_named_programs(
+            self._index, self._reranker, standalone_query, widened,
+        )
+        if not extra_queries or (nodes and nodes[0].score >= settings.confidence_threshold):
+            return nodes
         return await retrieve_for_named_programs(
-            self._index, self._reranker, standalone_query, source_files + supplementary,
+            self._index, self._reranker, standalone_query, widened,
             extra_queries=extra_queries,
         )
 

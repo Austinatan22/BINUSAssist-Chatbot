@@ -187,6 +187,15 @@ async def retrieve_for_named_programs(
     spend on far fewer, far noisier chunks.
     """
     all_queries = [query] + list(extra_queries or [])
+    # settings.retrieval_top_k (20) is per SOURCE here, so a wide fan-out multiplies it and
+    # reranking dominates this path (measured: 2.02s for 260 real chunks, ~7.8ms each,
+    # against 1.47s for the 48 dense retrievals that produced them). Lowering it is
+    # tempting and was tried: at 6 per source, "Di kampus mana saja ada Computer Science?"
+    # and "Is there an entrance exam for Computer Science?" both stopped answering. Dense
+    # top-k is the RECALL stage and the cross-encoder is the precision stage -- the whole
+    # value of reranking is promoting a chunk that dense ranked low, so starving it of
+    # candidates defeats it. Cut the number of SOURCES instead (see chat_service's
+    # _ASPECT_URL_FAMILIES), which shrinks the same pool without touching per-source recall.
 
     async def _retrieve_one(source_file: str) -> tuple[str, list[NodeWithScore]]:
         retriever = index.as_retriever(
