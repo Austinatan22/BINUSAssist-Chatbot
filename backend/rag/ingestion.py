@@ -804,34 +804,86 @@ def _scholar_lecturer_post(endpoint: str, fields: dict) -> list:
     return payload.get("data") or []
 
 
-def _lecturer_detail(code: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
-    """(name, academic rank, department) for a lecturer code, or (None, None, None) if the
-    detail API has no active record (e.g. emeritus/inactive faculty, or a campus-page code
+# A transient scholar-API failure must never be readable as "this lecturer taught nothing". One
+# or two retries with a short backoff absorb an ordinary blip; past that the failure is REPORTED
+# rather than folded into an empty result, because the two are not the same fact and the callers
+# below depend on telling them apart. Cost of the retries is bounded: they only fire on an actual
+# failure, and the crawl already paces itself at 50ms per lecturer.
+#
+# This is not hypothetical. On 2026-08-07 a mid-probe scholar-API failure produced a record that
+# looked exactly like real data, and the conclusion drawn from it -- that the faculty snapshot had
+# drifted from the source -- was wrong. Re-probing showed the snapshot was correct all along.
+_SCHOLAR_ATTEMPTS = 3
+_SCHOLAR_RETRY_BACKOFF_S = 0.6
+
+# Crawl-time provenance on a record whose scholar responses were not all readable. Never part of
+# the stored schema -- _save_faculty_snapshot strips it, so a bootstrap crawl and a refresh both
+# write the shape a reader expects.
+_SCAN_INCOMPLETE_KEY = "_scan_incomplete"
+
+
+def _scholar_post_ok(endpoint: str, fields: dict) -> tuple[list, bool]:
+    """(rows, ok). ok=False means the API did not answer after _SCHOLAR_ATTEMPTS tries, which is
+    categorically different from it answering with no rows. Every caller must branch on this
+    rather than on `not rows`, or "no answer" silently becomes "nothing to report"."""
+    for attempt in range(_SCHOLAR_ATTEMPTS):
+        try:
+            return _scholar_lecturer_post(endpoint, fields), True
+        except Exception as exc:
+            if attempt + 1 >= _SCHOLAR_ATTEMPTS:
+                logger.warning(
+                    "scholar %s gave up after %d attempts for %r: %s",
+                    endpoint, _SCHOLAR_ATTEMPTS, fields.get("lecturer_id"), exc,
+                )
+                return [], False
+            time.sleep(_SCHOLAR_RETRY_BACKOFF_S * (attempt + 1))
+    return [], False
+
+
+def _lecturer_detail(code: str) -> tuple[Optional[str], Optional[str], Optional[str], bool]:
+    """(name, academic rank, department, ok) for a lecturer code. The first three are None when
+    the detail API has no active record (e.g. emeritus/inactive faculty, or a campus-page code
     not in the scholar system). The detail endpoint repeats the same record several times;
     the first is enough. Name is included so a code discovered on a campus page but absent
-    from the main roster list can still be named."""
-    try:
-        rows = _scholar_lecturer_post("detail", {"token": "", "lecturer_id": code})
-    except Exception:
-        return None, None, None
+    from the main roster list can still be named.
+
+    `ok` is False only when the API never answered. A genuinely absent record returns
+    (None, None, None, True) -- that is a real answer, and overwriting a cached rank with it is
+    correct. An unanswered request returns ok=False so the caller can decline to overwrite."""
+    rows, ok = _scholar_post_ok("detail", {"token": "", "lecturer_id": code})
     if not rows:
-        return None, None, None
-    return rows[0].get("namaDosen"), rows[0].get("desc_JJA2"), rows[0].get("desc_Department")
+        return None, None, None, ok
+    return (
+        rows[0].get("namaDosen"), rows[0].get("desc_JJA2"), rows[0].get("desc_Department"), ok,
+    )
 
 
-def _lecturer_recent_courses(code: str, back_years: int = 5) -> tuple[Optional[str], list[str]]:
-    """(year, courses) for the most recent academic year in which the lecturer taught a real
-    (non-filler) course, scanning back from the current year. Returns (None, []) if none in
-    range. Scanning back rather than pinning a year makes this roll forward on its own as new
-    years populate; the filler-course skip (see _FILLER_COURSE_TITLE) stops a barely-started
-    new year from masking the last year of actual teaching."""
+def _lecturer_recent_courses(
+    code: str, back_years: int = 5
+) -> tuple[Optional[str], list[str], bool]:
+    """(year, courses, complete) for the most recent academic year in which the lecturer taught a
+    real (non-filler) course, scanning back from the current year. Returns (None, [], complete)
+    if none in range. Scanning back rather than pinning a year makes this roll forward on its own
+    as new years populate; the filler-course skip (see _FILLER_COURSE_TITLE) stops a barely-
+    started new year from masking the last year of actual teaching.
+
+    `complete` is False when at least one year NEWER than the one returned could not be read.
+    That is the difference between "2025 is this lecturer's most recent teaching year" and "2025
+    is the most recent year we managed to ask about". A failing year is still skipped rather than
+    aborting the scan -- returning the older year beats returning nothing -- but the caller is
+    told the answer may be stale, because a silently backdated year is indistinguishable from
+    real data once it is in the snapshot.
+    """
     current_year = datetime.now(timezone.utc).year
+    complete = True
     for year in range(current_year, current_year - back_years, -1):
-        try:
-            rows = _scholar_lecturer_post(
-                "teachings/list", {"token": "", "lecturer_id": code, "year": str(year)}
-            )
-        except Exception:
+        rows, ok = _scholar_post_ok(
+            "teachings/list", {"token": "", "lecturer_id": code, "year": str(year)}
+        )
+        if not ok:
+            # Unknown, not empty. Only years newer than whatever we eventually return can reach
+            # this point, so one flag is enough to say "something newer was unreadable".
+            complete = False
             continue
         titles = sorted({
             r.get("coursE_TITLE_LONG", "").strip()
@@ -840,8 +892,8 @@ def _lecturer_recent_courses(code: str, back_years: int = 5) -> tuple[Optional[s
         })
         substantive = [t for t in titles if t != _FILLER_COURSE_TITLE]
         if substantive:
-            return str(year), substantive
-    return None, []
+            return str(year), substantive, complete
+    return None, [], complete
 
 
 def _faculty_node_text(
@@ -1125,15 +1177,21 @@ def _scrape_faculty_records(url: str) -> list[dict]:
     # 4) union of codes: roster order first, then campus/leadership codes the roster missed.
     extra_codes = [c for c in (campus_by_code.keys() | leadership_by_code.keys()) if c not in roster]
     for code in list(roster) + extra_codes:
-        name, role, dept = _lecturer_detail(code)
+        name, role, dept, detail_ok = _lecturer_detail(code)
         name = roster.get(code) or name or code
-        year, courses = _lecturer_recent_courses(code)
-        records.append({
+        year, courses, courses_complete = _lecturer_recent_courses(code)
+        record = {
             "citation_unit": code, "code": code, "name": name, "rank": role,
             "dept": dept, "year": year, "courses": courses,
             "campuses": sorted(campus_by_code.get(code, ())),
             "struktural": leadership_by_code.get(code),
-        })
+        }
+        # Marked, not dropped: a partially-read lecturer is still worth having. The flag lets
+        # refresh_faculty_snapshot decline to overwrite better cached data with this record, and
+        # is stripped before anything is written (see _save_faculty_snapshot).
+        if not (detail_ok and courses_complete):
+            record[_SCAN_INCOMPLETE_KEY] = True
+        records.append(record)
         time.sleep(0.05)
 
     # 4) campus-page people with no code and no roster match: minimal name+campus records.
@@ -1178,28 +1236,100 @@ def _load_faculty_snapshot() -> Optional[list[dict]]:
 
 
 def _save_faculty_snapshot(records: list[dict]) -> None:
+    records = [{k: v for k, v in r.items() if k != _SCAN_INCOMPLETE_KEY} for r in records]
     settings.faculty_snapshot_path.write_text(
         json.dumps(records, ensure_ascii=False, indent=1), encoding="utf-8"
     )
 
 
+def _lecturers_with_courses(records: list[dict]) -> int:
+    return sum(1 for r in records if r.get("courses"))
+
+
+def _restore_unreadable_teaching(fresh: list[dict], existing: list[dict]) -> int:
+    """For each fresh record whose scan couldn't read the newer years, keep whatever the previous
+    snapshot already knew when that is at least as recent. Returns how many were restored.
+
+    Without this, one transient API failure per lecturer silently rewrites their most-recent
+    teaching year BACKWARDS, and no record-count guard can see it: every record is present, every
+    field is populated, the year is just wrong. A "who teaches X" answer is built from exactly
+    these course lists, so a backdated year quietly changes who the bot says teaches what.
+    """
+    by_unit = {r.get("citation_unit"): r for r in existing}
+    restored = 0
+    for record in fresh:
+        if not record.get(_SCAN_INCOMPLETE_KEY):
+            continue
+        cached = by_unit.get(record.get("citation_unit"))
+        if not cached or not cached.get("courses"):
+            continue
+        # Restore when the fresh scan found nothing at all, or when the cache knows a NEWER year
+        # than the fallback year this scan settled on. Never when the fresh year is newer: that
+        # is real new information, incomplete scan or not.
+        if not record.get("courses") or (cached.get("year") or "") > (record.get("year") or ""):
+            record["year"] = cached.get("year")
+            record["courses"] = list(cached.get("courses") or [])
+            restored += 1
+    return restored
+
+
 def refresh_faculty_snapshot(url: str = FACULTY_ROSTER_URL, min_fraction: float = 0.9) -> dict:
     """Force a fresh crawl (the ONLY path that re-scrapes) and overwrite the cached snapshot.
-    Guardrail: if a snapshot already exists and the fresh crawl returns notably fewer records
-    than it (< min_fraction), the crawl is treated as a degraded/broken source and the good
-    snapshot is KEPT -- so a rotated token or a restyled BINUS page can't silently shrink the
-    roster. Returns {records, wrote, reason}."""
+
+    Two guardrails, because a degraded crawl has two very different shapes.
+
+    Record count: if the fresh crawl returns notably fewer records than the cache
+    (< min_fraction), a rotated token or a restyled BINUS page has broken the roster scrape, and
+    the good snapshot is KEPT.
+
+    Lecturers with courses: the count check passes untouched when the roster page scrapes fine but
+    the scholar API is down, because every name is still there -- just with no rank, no department
+    and no courses. That is the more likely outage of the two (two APIs and a bearer token versus
+    one HTML page) and it was invisible to the old guard. Course lists are what a who-teaches
+    answer is built from, so they get their own threshold.
+
+    Records whose scan was incomplete also have their cached year/courses restored first, so a
+    per-lecturer blip can't backdate a teaching year (see _restore_unreadable_teaching).
+
+    Returns {records, wrote, reason, incomplete, restored}.
+    """
     fresh = _scrape_faculty_records(url)
     existing = _load_faculty_snapshot() or []
-    if existing and len(fresh) < len(existing) * min_fraction:
-        reason = f"fresh crawl {len(fresh)} < {min_fraction:.0%} of cached {len(existing)}; kept cache"
+    incomplete = sum(1 for r in fresh if r.get(_SCAN_INCOMPLETE_KEY))
+    restored = _restore_unreadable_teaching(fresh, existing) if existing else 0
+    if incomplete:
+        logger.warning(
+            "refresh_faculty_snapshot: %d/%d records had an unreadable scholar response; "
+            "restored cached teaching data for %d of them",
+            incomplete, len(fresh), restored,
+        )
+
+    def kept(reason: str) -> dict:
         logger.warning("refresh_faculty_snapshot: %s", reason)
-        return {"records": existing, "wrote": False, "reason": reason}
+        return {"records": existing, "wrote": False, "reason": reason,
+                "incomplete": incomplete, "restored": restored}
+
     if not fresh:
-        return {"records": existing, "wrote": False, "reason": "fresh crawl returned nothing"}
+        return kept("fresh crawl returned nothing")
+    if existing and len(fresh) < len(existing) * min_fraction:
+        return kept(
+            f"fresh crawl {len(fresh)} < {min_fraction:.0%} of cached {len(existing)}; kept cache"
+        )
+    if existing:
+        fresh_taught = _lecturers_with_courses(fresh)
+        cached_taught = _lecturers_with_courses(existing)
+        if cached_taught and fresh_taught < cached_taught * min_fraction:
+            return kept(
+                f"fresh crawl has courses for {fresh_taught} lecturers < {min_fraction:.0%} of "
+                f"cached {cached_taught}; scholar API likely degraded; kept cache"
+            )
+
     _save_faculty_snapshot(fresh)
-    logger.info("refresh_faculty_snapshot: wrote %d records to %s", len(fresh), settings.faculty_snapshot_path)
-    return {"records": fresh, "wrote": True, "reason": None}
+    logger.info(
+        "refresh_faculty_snapshot: wrote %d records to %s", len(fresh), settings.faculty_snapshot_path
+    )
+    return {"records": fresh, "wrote": True, "reason": None,
+            "incomplete": incomplete, "restored": restored}
 
 
 def _faculty_roster_nodes(url: str) -> list[TextNode]:

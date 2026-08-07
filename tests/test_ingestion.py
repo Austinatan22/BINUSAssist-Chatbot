@@ -6,6 +6,7 @@ initialization. See IMPROVEMENTS.md #7.2, which names _is_cross_program_partner_
 and the chunk-splitting logic specifically as high-regression-risk code worth covering.
 """
 import io
+import json
 import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -858,6 +859,12 @@ class TestFacultyNodeText:
 
 
 class TestLecturerRecentCourses:
+    @pytest.fixture(autouse=True)
+    def _no_retry_sleeps(self, monkeypatch):
+        # _scholar_post_ok backs off between attempts; the tests here exercise the failure path
+        # deliberately, so don't pay 3 x 0.6s per failing year for it.
+        monkeypatch.setattr(ingestion.time, "sleep", lambda _s: None)
+
     def test_skips_a_year_whose_only_course_is_the_filler(self, monkeypatch):
         # 2026 has only "BINUS DNA" (onboarding filler) -> not a real teaching year -> the
         # function must fall through to 2025's actual courses. Guards the exact data quirk
@@ -872,26 +879,98 @@ class TestLecturerRecentCourses:
         monkeypatch.setattr(ingestion, "_scholar_lecturer_post", fake_post)
         monkeypatch.setattr(ingestion, "datetime", _FrozenDatetime(2026))
 
-        year, courses = _lecturer_recent_courses("D1")
+        year, courses, complete = _lecturer_recent_courses("D1")
         assert year == "2025"
         # Filler is dropped from the listed courses too, even alongside a real one.
         assert courses == ["Machine Learning"]
+        # Every year was READ successfully; 2026 just had nothing substantive in it. That is a
+        # real answer, so the scan is complete.
+        assert complete is True
 
     def test_returns_none_when_no_year_has_a_real_course(self, monkeypatch):
         monkeypatch.setattr(ingestion, "_scholar_lecturer_post", lambda e, f: [])
         monkeypatch.setattr(ingestion, "datetime", _FrozenDatetime(2026))
-        assert _lecturer_recent_courses("D1") == (None, [])
+        assert _lecturer_recent_courses("D1") == (None, [], True)
 
     def test_a_failing_year_is_skipped_not_fatal(self, monkeypatch):
-        # A network error on one year must not abort the whole scan.
+        # A network error on one year must not abort the whole scan: the older year's courses are
+        # better than nothing.
         def flaky_post(endpoint, fields):
             if fields["year"] == "2026":
                 raise ConnectionError("boom")
             return [{"coursE_TITLE_LONG": "Databases"}]
         monkeypatch.setattr(ingestion, "_scholar_lecturer_post", flaky_post)
         monkeypatch.setattr(ingestion, "datetime", _FrozenDatetime(2026))
-        year, courses = _lecturer_recent_courses("D1")
+        year, courses, complete = _lecturer_recent_courses("D1")
         assert year == "2025" and courses == ["Databases"]
+
+    def test_a_failing_newer_year_marks_the_scan_incomplete(self, monkeypatch):
+        # The bug this exists to prevent. 2026 is UNREADABLE, not empty, so "2025" is only "the
+        # most recent year we managed to ask about" -- indistinguishable from real data once it is
+        # written to the snapshot. complete=False is the signal that keeps it from overwriting.
+        def flaky_post(endpoint, fields):
+            if fields["year"] == "2026":
+                raise ConnectionError("boom")
+            return [{"coursE_TITLE_LONG": "Databases"}]
+        monkeypatch.setattr(ingestion, "_scholar_lecturer_post", flaky_post)
+        monkeypatch.setattr(ingestion, "datetime", _FrozenDatetime(2026))
+        assert _lecturer_recent_courses("D1")[2] is False
+
+    def test_a_transient_failure_is_retried_before_being_believed(self, monkeypatch):
+        # One blip on the newest year must not cost the newest year. Retry absorbs it and the scan
+        # stays complete.
+        calls = {"n": 0}
+
+        def flaky_once(endpoint, fields):
+            if fields["year"] == "2026":
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    raise ConnectionError("blip")
+                return [{"coursE_TITLE_LONG": "Deep Learning"}]
+            return []
+        monkeypatch.setattr(ingestion, "_scholar_lecturer_post", flaky_once)
+        monkeypatch.setattr(ingestion, "datetime", _FrozenDatetime(2026))
+        year, courses, complete = _lecturer_recent_courses("D1")
+        assert (year, courses, complete) == ("2026", ["Deep Learning"], True)
+        assert calls["n"] == 2  # failed once, retried, succeeded
+
+    def test_gives_up_after_the_attempt_budget(self, monkeypatch):
+        calls = {"n": 0}
+
+        def always_fails(endpoint, fields):
+            calls["n"] += 1
+            raise TimeoutError("down")
+        monkeypatch.setattr(ingestion, "_scholar_lecturer_post", always_fails)
+        monkeypatch.setattr(ingestion, "datetime", _FrozenDatetime(2026))
+        year, courses, complete = _lecturer_recent_courses("D1", back_years=1)
+        assert (year, courses, complete) == (None, [], False)
+        assert calls["n"] == ingestion._SCHOLAR_ATTEMPTS  # bounded, not an infinite retry
+
+
+class TestLecturerDetailReportsWhetherTheApiAnswered:
+    """_lecturer_detail used to swallow a network error and return (None, None, None), which is
+    the same value it returns for a lecturer who genuinely has no active record. Overwriting a
+    cached rank/department with the first is a regression; with the second it is correct."""
+
+    @pytest.fixture(autouse=True)
+    def _no_retry_sleeps(self, monkeypatch):
+        monkeypatch.setattr(ingestion.time, "sleep", lambda _s: None)
+
+    def test_a_genuinely_absent_record_is_a_real_answer(self, monkeypatch):
+        monkeypatch.setattr(ingestion, "_scholar_lecturer_post", lambda e, f: [])
+        assert ingestion._lecturer_detail("D1") == (None, None, None, True)
+
+    def test_an_unanswered_request_is_flagged(self, monkeypatch):
+        def down(endpoint, fields):
+            raise ConnectionError("boom")
+        monkeypatch.setattr(ingestion, "_scholar_lecturer_post", down)
+        assert ingestion._lecturer_detail("D1") == (None, None, None, False)
+
+    def test_returns_rank_and_department_on_success(self, monkeypatch):
+        monkeypatch.setattr(ingestion, "_scholar_lecturer_post", lambda e, f: [
+            {"namaDosen": "Ada L", "desc_JJA2": "Lektor", "desc_Department": "Computer Science"},
+        ])
+        assert ingestion._lecturer_detail("D1") == ("Ada L", "Lektor", "Computer Science", True)
 
 
 class _FrozenDatetime:
@@ -1063,3 +1142,133 @@ class TestLeadershipRoles:
                                            struktural="Head of Computer Science Program - Kemanggisan")
         assert "Jabatan struktural" in out and "Head of Computer Science Program - Kemanggisan" in out
         assert "Leadership position" in out
+
+
+class TestFacultySnapshotGuards:
+    """refresh_faculty_snapshot is the only path that re-scrapes, and it OVERWRITES the snapshot
+    every other code path reads offline. Its old guard compared record COUNTS only, which cannot
+    see the two degradations that actually happen."""
+
+    def _snapshot(self, tmp_path, monkeypatch, records):
+        path = tmp_path / "faculty.json"
+        path.write_text(json.dumps(records), encoding="utf-8")
+        monkeypatch.setattr(ingestion.settings, "faculty_snapshot_path", path)
+        return path
+
+    def _rec(self, code, courses=("Databases",), year="2026", **kw):
+        base = {"citation_unit": code, "code": code, "name": f"Dosen {code}", "rank": "Lektor",
+                "dept": "Computer Science", "year": year, "courses": list(courses),
+                "campuses": [], "struktural": None}
+        base.update(kw)
+        return base
+
+    def test_scholar_api_down_keeps_the_cache_even_though_every_name_is_present(
+        self, tmp_path, monkeypatch
+    ):
+        # The outage the count guard could never catch: the roster HTML scrapes fine so all 10
+        # records are there, but the scholar API answered nothing, so every course list is empty.
+        # Two APIs plus a bearer token fail more often than one HTML page, and a who-teaches answer
+        # is built from exactly these course lists.
+        cached = [self._rec(f"D{i}") for i in range(10)]
+        path = self._snapshot(tmp_path, monkeypatch, cached)
+        gutted = [self._rec(f"D{i}", courses=(), year=None) for i in range(10)]
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: gutted)
+
+        result = ingestion.refresh_faculty_snapshot("http://x")
+
+        assert result["wrote"] is False
+        assert "scholar API likely degraded" in result["reason"]
+        assert json.loads(path.read_text(encoding="utf-8")) == cached  # untouched on disk
+
+    def test_a_shrunken_roster_still_keeps_the_cache(self, tmp_path, monkeypatch):
+        cached = [self._rec(f"D{i}") for i in range(10)]
+        path = self._snapshot(tmp_path, monkeypatch, cached)
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: [self._rec("D0")])
+
+        result = ingestion.refresh_faculty_snapshot("http://x")
+
+        assert result["wrote"] is False and "of cached 10" in result["reason"]
+        assert json.loads(path.read_text(encoding="utf-8")) == cached
+
+    def test_an_incomplete_scan_cannot_backdate_a_teaching_year(self, tmp_path, monkeypatch):
+        # The headline bug. The cache knows D0 taught in 2026. A transient failure on 2026 makes
+        # the fresh crawl settle on 2024, which looks exactly like real data. Every record is
+        # present and populated, so no count-based guard fires.
+        cached = [self._rec("D0", courses=("Machine Learning",), year="2026")]
+        self._snapshot(tmp_path, monkeypatch, cached)
+        backdated = [self._rec("D0", courses=("Intro to Programming",), year="2024",
+                               **{ingestion._SCAN_INCOMPLETE_KEY: True})]
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: backdated)
+
+        result = ingestion.refresh_faculty_snapshot("http://x")
+
+        assert result["wrote"] is True
+        assert result["restored"] == 1
+        assert result["records"][0]["year"] == "2026"
+        assert result["records"][0]["courses"] == ["Machine Learning"]
+
+    def test_a_genuinely_newer_year_is_never_reverted(self, tmp_path, monkeypatch):
+        # The other direction must keep working: a newer year is real new information, and an
+        # incomplete flag on some OLDER year must not hold it back.
+        cached = [self._rec("D0", courses=("Old Course",), year="2024")]
+        self._snapshot(tmp_path, monkeypatch, cached)
+        fresher = [self._rec("D0", courses=("New Course",), year="2026",
+                             **{ingestion._SCAN_INCOMPLETE_KEY: True})]
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: fresher)
+
+        result = ingestion.refresh_faculty_snapshot("http://x")
+
+        assert result["restored"] == 0
+        assert result["records"][0]["year"] == "2026"
+        assert result["records"][0]["courses"] == ["New Course"]
+
+    def test_a_complete_scan_that_finds_nothing_is_allowed_to_clear_courses(
+        self, tmp_path, monkeypatch
+    ):
+        # A lecturer who genuinely stopped teaching must be able to lose their course list. Only
+        # an UNREADABLE response is protected, never a real empty answer -- otherwise the snapshot
+        # could never shed stale data. Ten records so the courses guard doesn't trip on one.
+        cached = [self._rec(f"D{i}") for i in range(10)]
+        self._snapshot(tmp_path, monkeypatch, cached)
+        fresh = [self._rec("D0", courses=(), year=None)] + [self._rec(f"D{i}") for i in range(1, 10)]
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: fresh)
+
+        result = ingestion.refresh_faculty_snapshot("http://x")
+
+        assert result["wrote"] is True and result["restored"] == 0
+        assert result["records"][0]["courses"] == []
+
+    def test_the_incomplete_flag_is_never_written_to_disk(self, tmp_path, monkeypatch):
+        # It is crawl provenance, not schema. A bootstrap crawl and a refresh must write the same
+        # shape, since _faculty_records_to_nodes and the len()-based guards both read the file.
+        path = tmp_path / "faculty.json"
+        monkeypatch.setattr(ingestion.settings, "faculty_snapshot_path", path)
+        fresh = [self._rec("D0", **{ingestion._SCAN_INCOMPLETE_KEY: True})]
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: fresh)
+
+        ingestion.refresh_faculty_snapshot("http://x")
+
+        written = json.loads(path.read_text(encoding="utf-8"))
+        assert ingestion._SCAN_INCOMPLETE_KEY not in written[0]
+        assert written[0]["name"] == "Dosen D0"
+
+    def test_first_ever_crawl_writes_without_a_cache_to_compare_against(self, tmp_path, monkeypatch):
+        path = tmp_path / "faculty.json"
+        monkeypatch.setattr(ingestion.settings, "faculty_snapshot_path", path)
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records",
+                            lambda url: [self._rec("D0"), self._rec("D1")])
+
+        result = ingestion.refresh_faculty_snapshot("http://x")
+
+        assert result["wrote"] is True and result["restored"] == 0
+        assert len(json.loads(path.read_text(encoding="utf-8"))) == 2
+
+    def test_an_empty_crawl_keeps_the_cache(self, tmp_path, monkeypatch):
+        cached = [self._rec("D0")]
+        path = self._snapshot(tmp_path, monkeypatch, cached)
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: [])
+
+        result = ingestion.refresh_faculty_snapshot("http://x")
+
+        assert result["wrote"] is False and result["reason"] == "fresh crawl returned nothing"
+        assert json.loads(path.read_text(encoding="utf-8")) == cached
