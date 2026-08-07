@@ -396,9 +396,11 @@ async def run_one(service: ChatService, entry: dict) -> dict:
     stream. The diagnostic fields ChatService doesn't put on the wire -- `top_score` and
     `is_comparison` -- are read from the record ChatService itself writes to the query log
     (captured via a _log_query monkeypatch in main()), so they're the pipeline's own computed
-    values, not a re-derivation. `rewrite_triggered` is no longer separately observable (the
-    rewrite retry is an internal step inside _route_retrieval with no external signal), so it's
-    reported as None rather than faked.
+    values, not a re-derivation -- `rewrite_triggered` included, since ChatService records it on
+    the Plan and logs it (it previously had no external signal and was reported as None; the
+    resulting blind spot wrongly cleared the rewrite retry as a latency suspect on 2026-08-07).
+    It is None on the short-circuit paths that never reach routing (smalltalk, blocked
+    extraction, cache hit), where "not applicable" is the honest value.
 
     Wrapped in a try/except: edge-case questions (empty input, degenerate strings) are here to
     probe for crashes, and one bad question shouldn't take down the rest of a run. A caught
@@ -454,6 +456,11 @@ async def run_one(service: ChatService, entry: dict) -> dict:
     # ChatService flags a comparison (see chat_service._log_query call sites).
     top_score = log_capture.get("top_score")
     is_comparison = log_capture.get("query_type") == "comparison"
+    # ChatService now records whether the low-confidence rewrite retry fired (Plan.
+    # rewrite_triggered), so this is the pipeline's own value again rather than None. Absent
+    # on the short-circuit paths (smalltalk, blocked extraction, cache hit) that never reach
+    # the routing phase -- None there means "not applicable", not "unknown".
+    rewrite_triggered = log_capture.get("rewrite_triggered")
 
     return {
         "question": question,
@@ -461,7 +468,7 @@ async def run_one(service: ChatService, entry: dict) -> dict:
         "expectation": entry.get("expectation"),
         "error": None,
         "top_score": top_score,
-        "rewrite_triggered": None,  # no longer externally observable -- see run_one docstring
+        "rewrite_triggered": rewrite_triggered,
         "is_comparison": is_comparison,
         "query_type": log_capture.get("query_type"),  # richer than the old bool: single/
         # comparison/clarification_campus/clarification_program/budget_exceeded/cache_hit/smalltalk

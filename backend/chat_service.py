@@ -121,6 +121,15 @@ class Plan:
     # word isn't in the context. A prompt-side note alone did NOT move gpt-4o-mini here; giving
     # it the canonical name (the deterministic fix) does. None -> generation uses the message.
     generation_query: str | None = None
+    # Did the low-confidence rewrite retry (R-08) fire on this turn? Every branch of
+    # _route_retrieval that can call rewrite_query sets it. Purely diagnostic -- it changes
+    # no behaviour -- but it is the single most expensive optional step in the pipeline
+    # (1-2s of LLM latency plus a second retrieval pass), and until now it left no trace in
+    # the query log at all: scripts/eval.py reported it as None rather than fake it, and
+    # query_log.jsonl never carried the field. That blind spot cost real debugging time on
+    # 2026-08-07, when the retry was wrongly ruled out as a latency suspect because the eval
+    # showed "0/66 rewrites" for a step that was in fact firing on most fallbacks.
+    rewrite_triggered: bool = False
     # Semantic-cache bookkeeping -- non-None only for a fresh (no-history) turn with an
     # index loaded, i.e. the states where caching applies.
     cache_embedding: object | None = None
@@ -212,6 +221,7 @@ class ChatService:
             "matched_programs": plan.matched_programs,
             "top_score": float(plan.nodes[0].score) if plan.nodes else None,
             "fallback": not plan.nodes,
+            "rewrite_triggered": plan.rewrite_triggered,
             "history_turns": len(history),
         }
 
@@ -410,6 +420,7 @@ class ChatService:
             # comparing in Indonesian against English-only catalogs).
             extra_queries: list[str] = []
             if (not nodes or nodes[0].score < gate) and not is_budget_exceeded():
+                plan.rewrite_triggered = True
                 extra_queries = await rewrite_query(attribute_query)
                 if extra_queries:
                     nodes = await retrieve_for_named_programs(
@@ -468,6 +479,7 @@ class ChatService:
             # path, since generation is about to be declined anyway in that case.
             extra_queries: list[str] = []
             if (not nodes or nodes[0].score < gate) and not is_budget_exceeded():
+                plan.rewrite_triggered = True
                 extra_queries = await rewrite_query(retrieval_query)
                 if extra_queries:
                     nodes = await retrieve_for_named_programs(
@@ -507,6 +519,7 @@ class ChatService:
                 plan.standalone_query, plan.program_names, known_campus_names()
             )
             if (not nodes or nodes[0].score < gate) and rewrite_worthwhile and not is_budget_exceeded():
+                plan.rewrite_triggered = True
                 extra_queries = await rewrite_query(retrieval_query)
                 if extra_queries:
                     nodes = await retrieve_and_rerank(
@@ -555,6 +568,7 @@ class ChatService:
             per_program_top_n=5,
         )
         if (not nodes or nodes[0].score < _WHO_TEACHES_GATE) and not is_budget_exceeded():
+            plan.rewrite_triggered = True
             extra_queries = await rewrite_query(plan.standalone_query)
             if extra_queries:
                 nodes = await retrieve_for_named_programs(

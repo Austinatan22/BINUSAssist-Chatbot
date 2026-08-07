@@ -298,6 +298,59 @@ class TestParaphrasesReachTheSupplementaryRetry:
         assert plan.nodes  # recovered instead of falling back
 
 
+class TestRewriteTriggeredIsRecorded:
+    """The rewrite retry is the most expensive optional step in the pipeline (1-2s of LLM
+    latency plus a second retrieval), and it used to leave no trace: query_log.jsonl never
+    carried the field and scripts/eval.py reported None rather than fake it. That blind spot
+    wrongly cleared it as a latency suspect on 2026-08-07. Plan.rewrite_triggered now records
+    it, so the query log and the eval both see the pipeline's own value."""
+
+    @staticmethod
+    def _open_branch(monkeypatch, first_score):
+        monkeypatch.setattr(chat_service, "is_budget_exceeded", lambda: False)
+        monkeypatch.setattr(chat_service, "known_campus_names", lambda: _ALL_CAMPUSES)
+        monkeypatch.setattr(chat_service, "rewrite_query", AsyncMock(return_value=["para"]))
+        monkeypatch.setattr(
+            chat_service, "retrieve_and_rerank", AsyncMock(return_value=[_fake_node(0.9)])
+        )
+        service = _service()
+        q = "what are the career prospects after graduating"
+        plan = Plan(standalone_query=q, program_names=_CATALOG)
+        program_match = SimpleNamespace(matched=[], named_unmatched=False)
+        asyncio.run(service._route_retrieval(
+            plan, program_match, {}, [_fake_node(first_score)], q,
+        ))
+        return plan
+
+    def test_true_when_the_retry_fires(self, monkeypatch):
+        plan = self._open_branch(monkeypatch, first_score=0.1)
+        assert plan.rewrite_triggered is True
+
+    def test_false_when_the_first_pass_is_confident(self, monkeypatch):
+        plan = self._open_branch(monkeypatch, first_score=0.95)
+        assert plan.rewrite_triggered is False
+
+    def test_false_when_the_gate_skips_an_off_topic_query(self, monkeypatch):
+        # The 2026-08-07 vocabulary gate skips the retry entirely for off-topic queries --
+        # the flag must reflect that it did not run, not that it was unobservable.
+        monkeypatch.setattr(chat_service, "is_budget_exceeded", lambda: False)
+        monkeypatch.setattr(chat_service, "known_campus_names", lambda: _ALL_CAMPUSES)
+        rw = AsyncMock(return_value=["para"])
+        monkeypatch.setattr(chat_service, "rewrite_query", rw)
+        service = _service()
+        q = "Can you recommend a good recipe for spaghetti carbonara?"
+        plan = Plan(standalone_query=q, program_names=_CATALOG)
+        asyncio.run(service._route_retrieval(
+            plan, SimpleNamespace(matched=[], named_unmatched=False), {}, [_fake_node(0.1)], q,
+        ))
+        rw.assert_not_awaited()
+        assert plan.rewrite_triggered is False
+
+    def test_default_is_false_not_none(self):
+        # None would be indistinguishable from the old "unobservable" state in the log.
+        assert Plan(standalone_query="q").rewrite_triggered is False
+
+
 class TestTuitionRoutedBeforeTheCatalog:
     """A program's own catalog cannot answer a tuition question -- it reranks 0.004 even
     spelled correctly. The default order still retrieved it first, and the low score it
