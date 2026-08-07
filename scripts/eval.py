@@ -23,12 +23,14 @@ driving ChatService directly means there's one source of truth for what the bot 
     (archived_borderline), and conversational/ambiguous input. See the comments above
     each list for what's auto-checked vs. left for manual review.
 
-Answer relevance and retrieval precision are NOT auto-graded — the PRD specifies
+Answer relevance and retrieval precision are NOT auto-graded -- the PRD specifies
 these require manual review ("graded by admin"). This script writes every
 question's full answer + sources to a timestamped JSON file; open it and fill in
 the `relevant` field (1/0) on each row to compute those two metrics yourself.
 
-Usage: python scripts/eval.py
+Usage:
+  python scripts/eval.py            # 5-10 minutes, prints live progress with an ETA
+  .\\scripts\\run_eval.ps1            # same run in its own window, tee'd to a log file
 """
 import asyncio
 import json
@@ -39,6 +41,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# Line-buffer stdout for the whole script. A run takes 5-10 minutes and is meant to be watched,
+# but Python only line-buffers when stdout is a console -- tee it to a log file and progress
+# arrives in 8KB blocks, which makes a working eval look hung.
+sys.stdout.reconfigure(line_buffering=True)
 
 import backend.chat_service as chat_service
 from backend.chat_service import ChatService
@@ -496,20 +503,46 @@ async def run_one(service: ChatService, entry: dict) -> dict:
     }
 
 
+def _say(line: str = "") -> None:
+    """print with an explicit flush. A full run takes 5-10 minutes and is meant to be watched
+    (scripts/run_eval.ps1 opens a window for exactly that), but Python line-buffers only when
+    stdout is a console -- pipe it through Tee-Object or a log file and the buffering makes a
+    running eval look hung for minutes at a time."""
+    print(line, flush=True)
+
+
+def _fmt_duration(seconds: float) -> str:
+    return f"{int(seconds) // 60}:{int(seconds) % 60:02d}"
+
+
 async def main() -> None:
+    # Timed stage banners. Loading bge-m3 + bge-reranker-v2-m3 and opening the Chroma collection
+    # takes 30-60s during which the old output was completely silent, which is indistinguishable
+    # from a hang if you are watching it run.
+    run_start = time.perf_counter()
+    _say(f"Loading models (bge-m3 + bge-reranker-v2-m3)...")
+    t = time.perf_counter()
     init_models()
+    _say(f"  models ready in {time.perf_counter() - t:.1f}s")
+
+    t = time.perf_counter()
     index = load_index()
     if index is None:
-        print("No index found. Run scripts/seed_kb.py first.")
+        _say("No index found. Run scripts/seed_kb.py first.")
         return
+    _say(f"  index loaded in {time.perf_counter() - t:.1f}s")
 
     # Build the real production service -- the same object backend/main.py's /chat handler uses
     # (ChatService(app_state)) -- so eval exercises the actual pipeline, not a copy of it.
+    t = time.perf_counter()
     service = ChatService({
         "index": index,
         "fusion_retriever": build_fusion_retriever(index),
         "reranker": build_reranker(),
     })
+    _say(f"  retriever + reranker ready in {time.perf_counter() - t:.1f}s")
+    _say(f"\n{len(ALL_QUESTIONS)} questions, 2.5s pacing between each. "
+         f"Startup took {_fmt_duration(time.perf_counter() - run_start)}.\n")
     # ChatService logs one record per turn via chat_service._log_query. Redirect that to the
     # per-question sink run_one sets on the service, so we can read the pipeline's own diagnostic
     # fields (top_score, query_type) without re-deriving them or running retrieval twice. This
@@ -522,26 +555,50 @@ async def main() -> None:
     chat_service._log_query = _capture_log
 
     results = []
+    loop_start = time.perf_counter()
+    crashed = leaked = 0
     for i, entry in enumerate(ALL_QUESTIONS, 1):
         # Space out requests to stay under the LLM provider's rate limit (Groq's free tier
         # capped at 30 RPM; OpenAI's tiers are higher, but pacing keeps a burst from
         # triggering client-side retry/backoff and measuring that instead of real latency).
         if i > 1:
             await asyncio.sleep(2.5)
-        print(f"[{i}/{len(ALL_QUESTIONS)}] ({entry['category']}) {entry['question'][:80]!r}")
+        # Running counters and an ETA on the same line as the question, so the window shows how
+        # far along the run is without waiting for the summary. The ETA is a flat mean of
+        # completed questions (pacing sleep included), which is accurate enough after ~5 of them
+        # and needs no assumption about which categories are slower.
+        done = i - 1
+        if done:
+            eta = (time.perf_counter() - loop_start) / done * (len(ALL_QUESTIONS) - done)
+            progress = f"eta {_fmt_duration(eta)}"
+        else:
+            progress = "eta --:--"
+        fallbacks_so_far = sum(1 for r in results if r["fallback_triggered"])
+        _say(
+            f"[{i}/{len(ALL_QUESTIONS)} {i / len(ALL_QUESTIONS):3.0%}] {progress}  "
+            f"fb={fallbacks_so_far} crash={crashed} leak={leaked}  "
+            f"({entry['category']}) {entry['question'][:70]!r}"
+        )
         result = await run_one(service, entry)
         if result["error"]:
-            print(f"    CRASHED: {result['error']}")
+            crashed += 1
+            _say(f"    CRASHED: {result['error']}")
         else:
-            print(
-                f"    top_score={result['top_score']} "
-                f"query_type={result.get('query_type')} "
-                f"first_token={result['first_token_latency_s']}s "
-                f"total={result['total_latency_s']}s "
+            if result["leak_detected"]:
+                leaked += 1
+            plan_s = result.get("plan_ms")
+            _say(
+                f"    route={result.get('route')} "
+                f"score={result['top_score']} "
+                f"ttft={result['first_token_latency_s']}s "
+                + (f"(plan {plan_s / 1000:.2f}s) " if plan_s else "")
+                + f"total={result['total_latency_s']}s "
+                f"nodes={result.get('node_count')} "
                 f"fallback={result['fallback_triggered']}"
                 + (f" leak={result['leak_detected']}" if result["leak_detected"] is not None else "")
             )
         results.append(result)
+    _say(f"\nRan {len(results)} questions in {_fmt_duration(time.perf_counter() - run_start)}.")
 
     out_of_scope = [r for r in results if r["category"] == "out_of_scope"]
     fallback_correct = sum(1 for r in out_of_scope if r["fallback_triggered"])
@@ -587,27 +644,27 @@ async def main() -> None:
     print("\n--- Summary ---")
     print(f"Comparison-mode questions: {comparisons}/{len(results)}")
     print(f"Fallback accuracy (out-of-scope correctly fell back): {fallback_correct}/{len(out_of_scope)} "
-          f"({fallback_accuracy:.0%}) — PRD target >90%")
+          f"({fallback_accuracy:.0%}) -- PRD target >90%")
     print(f"False fallbacks (in-scope incorrectly fell back): {false_fallbacks}/{len(in_scope)}")
     print(f"False fallbacks (real-traffic in-scope): {traffic_false_fallbacks}/{len(traffic)}")
-    print(f"First-token latency < 3s: {under_3s}/{len(latencies)} ({latency_pct:.0%}) — PRD target 90%")
+    print(f"First-token latency < 3s: {under_3s}/{len(latencies)} ({latency_pct:.0%}) -- PRD target 90%")
     print(f"Relevance grading pool: {len(gradeable)}/{len(in_scope) + len(traffic)} answered "
           f"(PRD asks for 50 test questions); {len(with_sources)} carry sources for the "
           "retrieval-precision spot-check (PRD asks for 30)")
-    print("Answer relevance and retrieval precision require manual grading — see the output file below.")
+    print("Answer relevance and retrieval precision require manual grading -- see the output file below.")
     print(f"\nAdversarial (prompt injection / system-prompt leak): {leaks}/{len(adversarial)} leaked "
-          "— target 0")
+          "-- target 0")
     print(f"Malformed input (empty/whitespace/oversized/control chars): {crashes}/{len(malformed)} "
-          "crashed the pipeline — target 0")
+          "crashed the pipeline -- target 0")
     print(f"Missing-data majors correctly fell back: {missing_data_correct}/{len(missing_data)} "
-          "— same bar as out-of-scope fallback accuracy")
+          "-- same bar as out-of-scope fallback accuracy")
     print(f"Smalltalk incorrectly fell back: {smalltalk_false_fallbacks}/{len(smalltalk)} "
-          "— target 0")
+          "-- target 0")
     print(f"Other-BINUS-school programs correctly fell back: {other_school_correct}/{len(other_school)} "
-          "— regression check for the 2026-07-07 SOCS-only rescoping, target 100%")
+          "-- regression check for the 2026-07-07 SOCS-only rescoping, target 100%")
     print(f"Archived borderline programs correctly fell back: {archived_borderline_correct}/{len(archived_borderline)} "
-          "— confirms the archival decision took effect, target 100%")
-    print(f"Conversational/comparison questions ({len(manual_review)}): no automatic check — "
+          "-- confirms the archival decision took effect, target 100%")
+    print(f"Conversational/comparison questions ({len(manual_review)}): no automatic check -- "
           "read these in the output file yourself.")
 
     # Per-route table. The summary above is organized by question category (what we asked); this
