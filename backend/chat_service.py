@@ -418,15 +418,13 @@ class ChatService:
             # Vocabulary-mismatch retry (R-08), same reasoning as the single-match branch
             # below -- a program-scoped comparison can suffer the identical failure (e.g.
             # comparing in Indonesian against English-only catalogs).
-            extra_queries: list[str] = []
-            if (not nodes or nodes[0].score < gate) and not is_budget_exceeded():
-                plan.rewrite_triggered = True
-                extra_queries = await rewrite_query(attribute_query)
-                if extra_queries:
-                    nodes = await retrieve_for_named_programs(
-                        self._index, self._reranker, attribute_query, source_files,
-                        balanced=True, extra_queries=extra_queries,
-                    )
+            nodes, extra_queries = await self._rewrite_retry(
+                plan, attribute_query, nodes,
+                lambda eq: retrieve_for_named_programs(
+                    self._index, self._reranker, attribute_query, source_files,
+                    balanced=True, extra_queries=eq,
+                ),
+            )
             nodes = await self._retry_with_supplementary_sources(
                 plan, attribute_query, nodes, source_files, extra_queries
             )
@@ -477,15 +475,13 @@ class ChatService:
             # PDF even though the same-topic ENGLISH question scored 0.997 against the
             # identical document. Skipped once the token budget is spent, same as the open
             # path, since generation is about to be declined anyway in that case.
-            extra_queries: list[str] = []
-            if (not nodes or nodes[0].score < gate) and not is_budget_exceeded():
-                plan.rewrite_triggered = True
-                extra_queries = await rewrite_query(retrieval_query)
-                if extra_queries:
-                    nodes = await retrieve_for_named_programs(
-                        self._index, self._reranker, retrieval_query, source_files,
-                        extra_queries=extra_queries,
-                    )
+            nodes, extra_queries = await self._rewrite_retry(
+                plan, retrieval_query, nodes,
+                lambda eq: retrieve_for_named_programs(
+                    self._index, self._reranker, retrieval_query, source_files,
+                    extra_queries=eq,
+                ),
+            )
             nodes = await self._retry_with_supplementary_sources(
                 plan, retrieval_query, nodes, source_files, extra_queries
             )
@@ -518,13 +514,13 @@ class ChatService:
             rewrite_worthwhile = has_domain_vocabulary(retrieval_query) or resembles_known_entity(
                 plan.standalone_query, plan.program_names, known_campus_names()
             )
-            if (not nodes or nodes[0].score < gate) and rewrite_worthwhile and not is_budget_exceeded():
-                plan.rewrite_triggered = True
-                extra_queries = await rewrite_query(retrieval_query)
-                if extra_queries:
-                    nodes = await retrieve_and_rerank(
-                        self._fusion_retriever, self._reranker, retrieval_query, extra_queries
-                    )
+            nodes, _extra = await self._rewrite_retry(
+                plan, retrieval_query, nodes,
+                lambda eq: retrieve_and_rerank(
+                    self._fusion_retriever, self._reranker, retrieval_query, eq
+                ),
+                enabled=rewrite_worthwhile,
+            )
             plan.nodes = nodes if (nodes and nodes[0].score >= gate) else []
 
         # "Ask, don't guess": only once retrieval has definitively come up empty above
@@ -556,6 +552,36 @@ class ChatService:
                 ):
                     plan.unresolved_program_mention = token
 
+    async def _rewrite_retry(
+        self, plan, query, nodes, retrieve, *, gate: float | None = None, enabled: bool = True
+    ):
+        """The low-confidence rewrite retry (R-08), in one place.
+
+        Four branches need it (comparison, single-program, open, faculty) and they differ
+        only in which query they rewrite and how they re-retrieve, yet each had its own copy
+        of the same five decisions: is the first pass below the gate, is the retry allowed at
+        all, is the token budget spent, record that it fired, and skip the re-retrieval when
+        the rewrite returns nothing. Four copies is how the fifth one drifts -- concretely,
+        adding Plan.rewrite_triggered meant editing all four, and the faculty one is easy to
+        miss because it lives in its own method with a different gate.
+
+        `retrieve` takes the paraphrase list and performs the branch's own retrieval.
+        `gate` defaults to the global confidence threshold (faculty passes _WHO_TEACHES_GATE).
+        `enabled` carries a branch's extra precondition (the open branch skips the retry for
+        queries with no domain signal at all).
+
+        Returns (nodes, extra_queries). extra_queries is [] whenever the retry did not run or
+        produced nothing, which is what callers forward to the supplementary retry.
+        """
+        threshold = settings.confidence_threshold if gate is None else gate
+        if (nodes and nodes[0].score >= threshold) or not enabled or is_budget_exceeded():
+            return nodes, []
+        plan.rewrite_triggered = True
+        extra_queries = await rewrite_query(query)
+        if not extra_queries:
+            return nodes, []
+        return await retrieve(extra_queries), extra_queries
+
     async def _route_faculty(self, plan) -> None:
         """Fills plan.nodes for a faculty-person query (who-teaches OR leadership): retrieve
         ONLY from the faculty roster (retrieve_for_named_programs scoped to the one faculty
@@ -567,14 +593,14 @@ class ChatService:
             self._index, self._reranker, plan.standalone_query, [FACULTY_ROSTER_URL],
             per_program_top_n=5,
         )
-        if (not nodes or nodes[0].score < _WHO_TEACHES_GATE) and not is_budget_exceeded():
-            plan.rewrite_triggered = True
-            extra_queries = await rewrite_query(plan.standalone_query)
-            if extra_queries:
-                nodes = await retrieve_for_named_programs(
-                    self._index, self._reranker, plan.standalone_query, [FACULTY_ROSTER_URL],
-                    per_program_top_n=5, extra_queries=extra_queries,
-                )
+        nodes, _extra = await self._rewrite_retry(
+            plan, plan.standalone_query, nodes,
+            lambda eq: retrieve_for_named_programs(
+                self._index, self._reranker, plan.standalone_query, [FACULTY_ROSTER_URL],
+                per_program_top_n=5, extra_queries=eq,
+            ),
+            gate=_WHO_TEACHES_GATE,
+        )
         nodes = nodes if (nodes and nodes[0].score >= _WHO_TEACHES_GATE) else []
         plan.nodes = nodes[:_WHO_TEACHES_MAX_LECTURERS] if plan.who_teaches else nodes
 
