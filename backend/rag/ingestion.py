@@ -168,7 +168,28 @@ def _recover_dropped_credit_total(path: Path, docling_text: str) -> Optional[str
     if not match:
         return None
     unit = match.group(2) or "Credits"
-    recovered = f"Total Credits: {match.group(1)} {unit.title()}"
+    # Names the program, and says what the number MEANS in words a question would use. The
+    # earlier form was the bare fragment "Total Credits: 146 Credits" -- 26 characters, no program
+    # name, no context -- and among Computer_Science_2026.pdf's 830 sibling chunks that was not in
+    # the dense top 160 for "total credits Computer Science program require". So the fact was
+    # recovered into the index and then unreachable, which is the same as not recovering it.
+    #
+    # It appeared to work until 2026-08-08 only because the index had accumulated 232 duplicate
+    # copies of this document's chunks; with the node present twice, the approximate NN search
+    # sometimes surfaced one. A clean reindex removed the duplicates (1062 -> 835 nodes, same 830
+    # distinct texts) and the question started falling back, which is what a fresh clone would
+    # always have done.
+    #
+    # Same self-describing shape as _course_scu_row_nodes' "{program} program -- {course}: {n}
+    # SCU", for the same reason: a scoped retrieval competes against hundreds of chunks from the
+    # same document, so a chunk has to carry the words that identify it.
+    program = re.sub(
+        r"\s+", " ", _PROGRAM_YEAR_SUFFIX_RE.sub("", path.stem).replace("_", " ")
+    ).strip()
+    recovered = (
+        f"{program} program -- Total Credits: {match.group(1)} {unit.title()}. "
+        f"The {program} program requires a total of {match.group(1)} {unit.lower()} to graduate."
+    )
     logger.info("Recovered docling-dropped credit total for %s: %r", path.name, recovered)
     return recovered
 

@@ -92,11 +92,51 @@ class TestRecoverDroppedCreditTotal:
         p = tmp_path / "Computer_Science_2026.pdf"
         p.write_bytes(b"%PDF-1.4 stub")
         result = _recover_dropped_credit_total(p, "docling output with no credit total anywhere")
-        assert result == "Total Credits: 146 Credits"
+        assert result == (
+            "Computer Science program -- Total Credits: 146 Credits. "
+            "The Computer Science program requires a total of 146 credits to graduate."
+        )
+
+    def _stub_text_layer(self, tmp_path, filename, raw):
+        import sys
+        fake_page = MagicMock(get_textpage=lambda: MagicMock(get_text_range=lambda: raw))
+        fake_pdf = MagicMock()
+        fake_pdf.__len__ = lambda self: 1
+        fake_pdf.__getitem__ = lambda self, i: fake_page
+        sys.modules["pypdfium2"] = MagicMock(PdfDocument=lambda _p: fake_pdf)
+        p = tmp_path / filename
+        p.write_bytes(b"%PDF-1.4 stub")
+        return p
+
+    def test_the_recovered_fact_names_its_program(self, tmp_path):
+        """The property that makes it retrievable rather than merely present.
+
+        The old form was the bare fragment "Total Credits: 146 Credits": 26 characters, no program
+        name. Recovered into the index and then unreachable -- measured 2026-08-08, absent from the
+        dense top 160 of its OWN document for "total credits Computer Science program require",
+        because a scoped retrieval competes against 830 chunks from the same PDF and that fragment
+        carries none of the words the question uses. It appeared to work only because the index had
+        accumulated 232 duplicate copies of this document's chunks, giving the approximate NN
+        search two chances to surface it; a clean reindex removed them (1062 -> 835 nodes, same 830
+        distinct texts) and the question began falling back, which a fresh clone always would have.
+        """
+        p = self._stub_text_layer(
+            tmp_path, "Game_Application_and_Technology_2026.pdf", "TOTAL CREDITS 144 SCU"
+        )
+        result = _recover_dropped_credit_total(p, "no total here")
+
+        assert result is not None
+        # Names the program (year suffix stripped, underscores collapsed) so the chunk is
+        # distinguishable from the other nine catalogs' credit totals.
+        assert "Game Application and Technology" in result
+        assert "144" in result
+        # And states the fact in words a question would use, not only as a table label.
+        assert "requires a total of" in result
 
     def test_recovered_string_is_long_enough_to_survive_chunk_filters(self, tmp_path):
         # the <10-char / <20-char child-chunk drop filters must not eat the recovered fact
-        assert len("Total Credits: 146 Credits") >= 20
+        p = self._stub_text_layer(tmp_path, "Computer_Science_2026.pdf", "TOTAL CREDITS 146 Credits")
+        assert len(_recover_dropped_credit_total(p, "no total here")) >= 20
 
 
 class TestRecoverCareerList:
