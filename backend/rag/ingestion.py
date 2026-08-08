@@ -5,6 +5,7 @@ import logging
 import math
 import re
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
@@ -979,6 +980,18 @@ def _http_get_ok(url: str) -> tuple[Optional[str], bool]:
     for attempt in range(_SCHOLAR_ATTEMPTS):
         try:
             return _http_get(url), True
+        except urllib.error.HTTPError as exc:
+            # A 4xx other than 408/429 is the server's final answer, so retrying it just spends
+            # the backoff to be told the same thing. Matters at crawl scale: a removed lecturer
+            # profile 404s, and three attempts per dead page would add ~1.8s each across 233
+            # lecturers. 429 and 408 are the two that genuinely clear up, so they fall through.
+            if 400 <= exc.code < 500 and exc.code not in (408, 429):
+                logger.warning("GET %s: %s (not retried)", url, exc)
+                return None, False
+            if attempt + 1 >= _SCHOLAR_ATTEMPTS:
+                logger.warning("GET gave up after %d attempts: %s (%s)", _SCHOLAR_ATTEMPTS, url, exc)
+                return None, False
+            time.sleep(_SCHOLAR_RETRY_BACKOFF_S * (attempt + 1))
         except Exception as exc:
             if attempt + 1 >= _SCHOLAR_ATTEMPTS:
                 logger.warning("GET gave up after %d attempts: %s (%s)", _SCHOLAR_ATTEMPTS, url, exc)

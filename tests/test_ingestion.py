@@ -1400,3 +1400,62 @@ class TestStrukturalIsProtectedIndependently:
         for key in ingestion._CRAWL_PROVENANCE_KEYS:
             assert key not in written
         assert written["name"] == "Dosen D0"
+
+
+class TestHttpGetOkRetryPolicy:
+    """_http_get_ok distinguishes "the server refused" from "the request never landed", and only
+    retries the second. Both return ok=False, so callers behave the same; the difference is how
+    long the crawl spends being told no."""
+
+    def _boom(self, code):
+        import urllib.error
+
+        def raiser(url):
+            raise urllib.error.HTTPError(url, code, "nope", {}, None)
+        return raiser
+
+    def test_a_404_is_not_retried(self, monkeypatch):
+        calls = {"n": 0}
+
+        def counted(url):
+            calls["n"] += 1
+            self._boom(404)(url)
+        monkeypatch.setattr(ingestion, "_http_get", counted)
+        monkeypatch.setattr(ingestion.time, "sleep", lambda *_: None)
+        assert ingestion._http_get_ok("http://x") == (None, False)
+        assert calls["n"] == 1  # the server's final answer; retrying only burns backoff
+
+    def test_a_429_is_retried(self, monkeypatch):
+        # Rate limiting is exactly the case retrying exists for.
+        calls = {"n": 0}
+
+        def counted(url):
+            calls["n"] += 1
+            self._boom(429)(url)
+        monkeypatch.setattr(ingestion, "_http_get", counted)
+        monkeypatch.setattr(ingestion.time, "sleep", lambda *_: None)
+        assert ingestion._http_get_ok("http://x") == (None, False)
+        assert calls["n"] == ingestion._SCHOLAR_ATTEMPTS
+
+    def test_a_500_is_retried(self, monkeypatch):
+        calls = {"n": 0}
+
+        def counted(url):
+            calls["n"] += 1
+            self._boom(503)(url)
+        monkeypatch.setattr(ingestion, "_http_get", counted)
+        monkeypatch.setattr(ingestion.time, "sleep", lambda *_: None)
+        ingestion._http_get_ok("http://x")
+        assert calls["n"] == ingestion._SCHOLAR_ATTEMPTS
+
+    def test_a_connection_error_is_retried_then_succeeds(self, monkeypatch):
+        calls = {"n": 0}
+
+        def flaky(url):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise ConnectionError("blip")
+            return "<html>ok</html>"
+        monkeypatch.setattr(ingestion, "_http_get", flaky)
+        monkeypatch.setattr(ingestion.time, "sleep", lambda *_: None)
+        assert ingestion._http_get_ok("http://x") == ("<html>ok</html>", True)
