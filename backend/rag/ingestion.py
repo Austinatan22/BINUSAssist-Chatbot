@@ -816,10 +816,14 @@ def _scholar_lecturer_post(endpoint: str, fields: dict) -> list:
 _SCHOLAR_ATTEMPTS = 3
 _SCHOLAR_RETRY_BACKOFF_S = 0.6
 
-# Crawl-time provenance on a record whose scholar responses were not all readable. Never part of
-# the stored schema -- _save_faculty_snapshot strips it, so a bootstrap crawl and a refresh both
-# write the shape a reader expects.
+# Crawl-time provenance, never part of the stored schema -- _save_faculty_snapshot strips both, so
+# a bootstrap crawl and a refresh write the shape a reader expects.
+#   _scan_incomplete    this lecturer's own scholar responses were not all readable
+#   _struktural_unknown the shared org-chart page was not readable, so no record's struktural
+#                       means anything this run
 _SCAN_INCOMPLETE_KEY = "_scan_incomplete"
+_STRUKTURAL_UNKNOWN_KEY = "_struktural_unknown"
+_CRAWL_PROVENANCE_KEYS = (_SCAN_INCOMPLETE_KEY, _STRUKTURAL_UNKNOWN_KEY)
 
 
 def _scholar_post_ok(endpoint: str, fields: dict) -> tuple[list, bool]:
@@ -967,6 +971,22 @@ def _http_get(url: str) -> str:
         return response.read().decode("utf-8", "ignore")
 
 
+def _http_get_ok(url: str) -> tuple[Optional[str], bool]:
+    """(html, ok) with the same retry budget as the scholar API (see _scholar_post_ok), and for
+    the same reason: in this subsystem an unread page is not an empty page. A page that loads and
+    genuinely contains nothing returns ("", True) and is allowed to clear data; a page that never
+    loaded returns (None, False) so the caller can decline to overwrite what it already knows."""
+    for attempt in range(_SCHOLAR_ATTEMPTS):
+        try:
+            return _http_get(url), True
+        except Exception as exc:
+            if attempt + 1 >= _SCHOLAR_ATTEMPTS:
+                logger.warning("GET gave up after %d attempts: %s (%s)", _SCHOLAR_ATTEMPTS, url, exc)
+                return None, False
+            time.sleep(_SCHOLAR_RETRY_BACKOFF_S * (attempt + 1))
+    return None, False
+
+
 def _norm_person_name(name: str) -> str:
     """Symmetric name key: lowercase, non-letters -> space, collapsed -- keeps degree tokens
     (S.Kom etc.) so a full name matches the hyphen-joined form in a profile-page slug."""
@@ -1006,9 +1026,8 @@ def _jakarta_ajax_profile_urls(list_html: str) -> set[str]:
 
 
 def _campus_profile_urls(page_url: str) -> set[str]:
-    try:
-        html = _http_get(page_url)
-    except Exception:
+    html, ok = _http_get_ok(page_url)
+    if not ok:
         return set()
     urls = {
         m.group(1) for m in _PROFILE_URL_RE.finditer(html)
@@ -1025,9 +1044,8 @@ def _profile_code_and_name(profile_url: str) -> tuple[Optional[str], Optional[st
     " – BINUS ..." site suffix (the title uses an entity en-dash, e.g. `&#8211;`, so it must
     be unescaped before splitting). A code-less barebones profile still yields a clean name
     for the roster name-match fallback."""
-    try:
-        page = _http_get(profile_url)
-    except Exception:
+    page, ok = _http_get_ok(profile_url)
+    if not ok:
         return None, None
     codes = _DCODE_RE.findall(page)
     code = Counter(codes).most_common(1)[0][0] if codes else None
@@ -1095,15 +1113,24 @@ _LEADERSHIP_CARD_RE = re.compile(
 )
 
 
-def _scrape_leadership_roles(roster_name_to_code: dict[str, str]) -> dict[str, str]:
-    """{lecturer code -> structural role} from the SoCS org-chart page. A person may hold
+def _scrape_leadership_roles(roster_name_to_code: dict[str, str]) -> tuple[dict[str, str], bool]:
+    """({lecturer code -> structural role}, ok) from the SoCS org-chart page. A person may hold
     several roles (e.g. Head of a Department AND Head of a Program) -> joined with '; '.
-    Code resolved via the profile page's D-code, else a roster name-match. Best-effort: a
-    failed page/profile just yields fewer roles, never an error."""
-    try:
-        page = _http_get(_LEADERSHIP_PAGE_URL)
-    except Exception:
-        return {}
+    Code resolved via the profile page's D-code, else a roster name-match. Best-effort per card:
+    a failed profile just yields fewer roles.
+
+    The whole map comes from ONE page, which made this the worst instance of the "unread is not
+    empty" bug in the crawl. A single transient failure returned {} and every lecturer's
+    `struktural` became None, wiping all 19 structural roles the snapshot holds -- Dean, every
+    Head of Department and every Head of Program -- and both size guards passed, because the
+    record count and the course lists were untouched. The leadership route is answered from
+    exactly this field, so it silently lost every answer. `ok` is what lets the caller tell the
+    difference; a page that loads and matches no cards is a real (if suspicious) answer, and the
+    struktural guard in refresh_faculty_snapshot covers that case instead.
+    """
+    page, ok = _http_get_ok(_LEADERSHIP_PAGE_URL)
+    if not ok:
+        return {}, False
     roles: dict[str, str] = {}
     for profile_url, name_html, role_html in _LEADERSHIP_CARD_RE.findall(page):
         name = html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", name_html)).strip())
@@ -1119,7 +1146,7 @@ def _scrape_leadership_roles(roster_name_to_code: dict[str, str]) -> dict[str, s
             roles[code] = f"{roles[code]}; {role}" if code in roles else role
         time.sleep(0.03)
     logger.info("leadership scrape: %d structural roles", len(roles))
-    return roles
+    return roles, True
 
 
 def _faculty_node(
@@ -1171,7 +1198,7 @@ def _scrape_faculty_records(url: str) -> list[dict]:
 
     # 2) campus index across all 7 CS campuses, and 3) structural/leadership roles.
     campus_by_code, name_only = _build_campus_index(roster_name_to_code)
-    leadership_by_code = _scrape_leadership_roles(roster_name_to_code)
+    leadership_by_code, leadership_ok = _scrape_leadership_roles(roster_name_to_code)
 
     records: list[dict] = []
     # 4) union of codes: roster order first, then campus/leadership codes the roster missed.
@@ -1186,11 +1213,16 @@ def _scrape_faculty_records(url: str) -> list[dict]:
             "campuses": sorted(campus_by_code.get(code, ())),
             "struktural": leadership_by_code.get(code),
         }
-        # Marked, not dropped: a partially-read lecturer is still worth having. The flag lets
+        # Marked, not dropped: a partially-read lecturer is still worth having. The flags let
         # refresh_faculty_snapshot decline to overwrite better cached data with this record, and
-        # is stripped before anything is written (see _save_faculty_snapshot).
+        # are stripped before anything is written (see _save_faculty_snapshot).
         if not (detail_ok and courses_complete):
             record[_SCAN_INCOMPLETE_KEY] = True
+        # Tracked separately from the per-lecturer flag above because it has a different cause and
+        # a different remedy: struktural comes from one shared page, so when that page is unread
+        # EVERY record's None is meaningless, not just this one's.
+        if not leadership_ok:
+            record[_STRUKTURAL_UNKNOWN_KEY] = True
         records.append(record)
         time.sleep(0.05)
 
@@ -1236,14 +1268,35 @@ def _load_faculty_snapshot() -> Optional[list[dict]]:
 
 
 def _save_faculty_snapshot(records: list[dict]) -> None:
-    records = [{k: v for k, v in r.items() if k != _SCAN_INCOMPLETE_KEY} for r in records]
+    records = [
+        {k: v for k, v in r.items() if k not in _CRAWL_PROVENANCE_KEYS} for r in records
+    ]
     settings.faculty_snapshot_path.write_text(
         json.dumps(records, ensure_ascii=False, indent=1), encoding="utf-8"
     )
 
 
-def _lecturers_with_courses(records: list[dict]) -> int:
-    return sum(1 for r in records if r.get("courses"))
+def _lecturers_with(records: list[dict], field: str) -> int:
+    return sum(1 for r in records if r.get(field))
+
+
+def _restore_unknown_struktural(fresh: list[dict], existing: list[dict]) -> int:
+    """Put back cached structural roles when the org-chart page could not be read at all.
+
+    Separate from _restore_unreadable_teaching because the failure is shared, not per-lecturer:
+    one unread page means every record's `struktural` is None for no reason. Only restores where
+    the fresh record has nothing, so a role that genuinely changed still takes effect on any run
+    that actually read the page."""
+    by_unit = {r.get("citation_unit"): r for r in existing}
+    restored = 0
+    for record in fresh:
+        if not record.get(_STRUKTURAL_UNKNOWN_KEY) or record.get("struktural"):
+            continue
+        cached = by_unit.get(record.get("citation_unit"))
+        if cached and cached.get("struktural"):
+            record["struktural"] = cached["struktural"]
+            restored += 1
+    return restored
 
 
 def _restore_unreadable_teaching(fresh: list[dict], existing: list[dict]) -> int:
@@ -1297,17 +1350,23 @@ def refresh_faculty_snapshot(url: str = FACULTY_ROSTER_URL, min_fraction: float 
     existing = _load_faculty_snapshot() or []
     incomplete = sum(1 for r in fresh if r.get(_SCAN_INCOMPLETE_KEY))
     restored = _restore_unreadable_teaching(fresh, existing) if existing else 0
+    restored_roles = _restore_unknown_struktural(fresh, existing) if existing else 0
     if incomplete:
         logger.warning(
             "refresh_faculty_snapshot: %d/%d records had an unreadable scholar response; "
             "restored cached teaching data for %d of them",
             incomplete, len(fresh), restored,
         )
+    if any(r.get(_STRUKTURAL_UNKNOWN_KEY) for r in fresh):
+        logger.warning(
+            "refresh_faculty_snapshot: org-chart page unreadable; restored %d cached "
+            "structural roles", restored_roles,
+        )
 
     def kept(reason: str) -> dict:
         logger.warning("refresh_faculty_snapshot: %s", reason)
-        return {"records": existing, "wrote": False, "reason": reason,
-                "incomplete": incomplete, "restored": restored}
+        return {"records": existing, "wrote": False, "reason": reason, "incomplete": incomplete,
+                "restored": restored, "restored_roles": restored_roles}
 
     if not fresh:
         return kept("fresh crawl returned nothing")
@@ -1315,21 +1374,28 @@ def refresh_faculty_snapshot(url: str = FACULTY_ROSTER_URL, min_fraction: float 
         return kept(
             f"fresh crawl {len(fresh)} < {min_fraction:.0%} of cached {len(existing)}; kept cache"
         )
-    if existing:
-        fresh_taught = _lecturers_with_courses(fresh)
-        cached_taught = _lecturers_with_courses(existing)
-        if cached_taught and fresh_taught < cached_taught * min_fraction:
+    # One threshold per independently-failing source. Each of these fields comes from a different
+    # place (scholar API, org-chart page, campus people pages), so each can collapse on its own
+    # while the record count stays perfect.
+    for field, blame in (
+        ("courses", "scholar API likely degraded"),
+        ("struktural", "org-chart page likely restyled"),
+    ):
+        if not existing:
+            break
+        fresh_n, cached_n = _lecturers_with(fresh, field), _lecturers_with(existing, field)
+        if cached_n and fresh_n < cached_n * min_fraction:
             return kept(
-                f"fresh crawl has courses for {fresh_taught} lecturers < {min_fraction:.0%} of "
-                f"cached {cached_taught}; scholar API likely degraded; kept cache"
+                f"fresh crawl has {field} for {fresh_n} lecturers < {min_fraction:.0%} of cached "
+                f"{cached_n}; {blame}; kept cache"
             )
 
     _save_faculty_snapshot(fresh)
     logger.info(
         "refresh_faculty_snapshot: wrote %d records to %s", len(fresh), settings.faculty_snapshot_path
     )
-    return {"records": fresh, "wrote": True, "reason": None,
-            "incomplete": incomplete, "restored": restored}
+    return {"records": fresh, "wrote": True, "reason": None, "incomplete": incomplete,
+            "restored": restored, "restored_roles": restored_roles}
 
 
 def _faculty_roster_nodes(url: str) -> list[TextNode]:

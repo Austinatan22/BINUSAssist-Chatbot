@@ -1127,15 +1127,47 @@ class TestLeadershipRoles:
         monkeypatch.setattr(ingestion.time, "sleep", lambda *_: None)
         n2c = {ingestion._norm_person_name("Alice, S.Kom."): "D1",
                ingestion._norm_person_name("Bob, S.Kom."): "D2"}
-        assert ingestion._scrape_leadership_roles(n2c) == {
-            "D1": "Head of AI Program", "D2": "Head of Data Science Program"}
+        assert ingestion._scrape_leadership_roles(n2c) == (
+            {"D1": "Head of AI Program", "D2": "Head of Data Science Program"}, True)
 
     def test_multiple_roles_for_one_person_are_joined(self, monkeypatch):
         page = self._card("x", "X, S.Kom.", "Dean") + self._card("x2", "X, S.Kom.", "Head of AI Program")
         monkeypatch.setattr(ingestion, "_http_get", lambda u: page)
         monkeypatch.setattr(ingestion.time, "sleep", lambda *_: None)
         n2c = {ingestion._norm_person_name("X, S.Kom."): "D1"}
-        assert ingestion._scrape_leadership_roles(n2c) == {"D1": "Dean; Head of AI Program"}
+        assert ingestion._scrape_leadership_roles(n2c) == ({"D1": "Dean; Head of AI Program"}, True)
+
+    def test_an_unreadable_page_is_reported_not_returned_as_no_roles(self, monkeypatch):
+        # The whole map comes from one page, so `return {}` on a failed fetch used to wipe every
+        # structural role in the snapshot -- Dean included -- while the record count and course
+        # lists stayed perfect, so neither size guard could see it.
+        def down(url):
+            raise ConnectionError("boom")
+        monkeypatch.setattr(ingestion, "_http_get", down)
+        monkeypatch.setattr(ingestion.time, "sleep", lambda *_: None)
+        assert ingestion._scrape_leadership_roles({}) == ({}, False)
+
+    def test_a_page_that_loads_with_no_cards_is_a_real_answer(self, monkeypatch):
+        # ok=True: a restyled page is caught by the struktural size guard, not by pretending the
+        # fetch failed. Otherwise a genuine org-chart change could never take effect.
+        monkeypatch.setattr(ingestion, "_http_get", lambda u: "<html>no cards here</html>")
+        monkeypatch.setattr(ingestion.time, "sleep", lambda *_: None)
+        assert ingestion._scrape_leadership_roles({}) == ({}, True)
+
+    def test_a_transient_failure_is_retried(self, monkeypatch):
+        calls = {"n": 0}
+        page = self._card("a", "A, S.Kom.", "Dean")
+
+        def flaky(url):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise ConnectionError("blip")
+            return page
+        monkeypatch.setattr(ingestion, "_http_get", flaky)
+        monkeypatch.setattr(ingestion.time, "sleep", lambda *_: None)
+        roles, ok = ingestion._scrape_leadership_roles(
+            {ingestion._norm_person_name("A, S.Kom."): "D1"})
+        assert (roles, ok) == ({"D1": "Dean"}, True) and calls["n"] == 2
 
     def test_struktural_line_is_bilingual_in_node_text(self):
         out = ingestion._faculty_node_text("X", "D1", None, None, None, [], None,
@@ -1272,3 +1304,99 @@ class TestFacultySnapshotGuards:
 
         assert result["wrote"] is False and result["reason"] == "fresh crawl returned nothing"
         assert json.loads(path.read_text(encoding="utf-8")) == cached
+
+
+class TestStrukturalIsProtectedIndependently:
+    """`struktural` comes from ONE org-chart page, so its failure mode is all-or-nothing and
+    completely invisible to the record-count and courses guards: 233 records, 214 course lists,
+    and every one of the 19 structural roles gone. The leadership route ("who is the dean",
+    "siapa kepala program CS") is answered from exactly this field."""
+
+    def _snapshot(self, tmp_path, monkeypatch, records):
+        path = tmp_path / "faculty.json"
+        path.write_text(json.dumps(records), encoding="utf-8")
+        monkeypatch.setattr(ingestion.settings, "faculty_snapshot_path", path)
+        return path
+
+    def _rec(self, code, struktural=None, **kw):
+        base = {"citation_unit": code, "code": code, "name": f"Dosen {code}", "rank": "Lektor",
+                "dept": "Computer Science", "year": "2026", "courses": ["Databases"],
+                "campuses": [], "struktural": struktural}
+        base.update(kw)
+        return base
+
+    def test_an_unreadable_org_chart_restores_cached_roles(self, tmp_path, monkeypatch):
+        cached = [self._rec("D0", struktural="Dean - School of Computer Science"),
+                  self._rec("D1", struktural="Head of Cyber Security Program"),
+                  self._rec("D2")]
+        self._snapshot(tmp_path, monkeypatch, cached)
+        # Fresh crawl read everything EXCEPT the org chart, so struktural is None for all three.
+        blank = [self._rec("D0", **{ingestion._STRUKTURAL_UNKNOWN_KEY: True}),
+                 self._rec("D1", **{ingestion._STRUKTURAL_UNKNOWN_KEY: True}),
+                 self._rec("D2", **{ingestion._STRUKTURAL_UNKNOWN_KEY: True})]
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: blank)
+
+        result = ingestion.refresh_faculty_snapshot("http://x")
+
+        assert result["wrote"] is True
+        assert result["restored_roles"] == 2      # D2 never had one
+        by_code = {r["code"]: r for r in result["records"]}
+        assert by_code["D0"]["struktural"] == "Dean - School of Computer Science"
+        assert by_code["D1"]["struktural"] == "Head of Cyber Security Program"
+        assert by_code["D2"]["struktural"] is None
+
+    def test_a_restyled_org_chart_keeps_the_cache_via_its_own_guard(self, tmp_path, monkeypatch):
+        # Page LOADS (ok=True) but matches no cards, so nothing is restored and the struktural
+        # threshold is what catches it. 10 records so the count and courses guards stay quiet.
+        cached = [self._rec(f"D{i}", struktural="Head of Something") for i in range(10)]
+        path = self._snapshot(tmp_path, monkeypatch, cached)
+        stripped = [self._rec(f"D{i}") for i in range(10)]
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: stripped)
+
+        result = ingestion.refresh_faculty_snapshot("http://x")
+
+        assert result["wrote"] is False
+        assert "org-chart page likely restyled" in result["reason"]
+        assert json.loads(path.read_text(encoding="utf-8")) == cached
+
+    def test_a_real_role_change_still_takes_effect(self, tmp_path, monkeypatch):
+        # The protection must not freeze the field. A run that actually read the page can move a
+        # role, promote someone, or drop one person's role.
+        cached = [self._rec(f"D{i}", struktural="Head of Something") for i in range(10)]
+        self._snapshot(tmp_path, monkeypatch, cached)
+        moved = [self._rec("D0", struktural="Dean - School of Computer Science")] + \
+                [self._rec(f"D{i}", struktural="Head of Something") for i in range(1, 10)]
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: moved)
+
+        result = ingestion.refresh_faculty_snapshot("http://x")
+
+        assert result["wrote"] is True and result["restored_roles"] == 0
+        assert result["records"][0]["struktural"] == "Dean - School of Computer Science"
+
+    def test_a_fresh_role_is_never_overwritten_by_the_cache(self, tmp_path, monkeypatch):
+        # Even with the unknown flag set, a role the fresh crawl DID find wins: the flag only
+        # licenses filling a hole, never replacing a value.
+        cached = [self._rec("D0", struktural="Head of AI Program")]
+        self._snapshot(tmp_path, monkeypatch, cached)
+        fresh = [self._rec("D0", struktural="Dean - School of Computer Science",
+                           **{ingestion._STRUKTURAL_UNKNOWN_KEY: True})]
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: fresh)
+
+        result = ingestion.refresh_faculty_snapshot("http://x")
+
+        assert result["restored_roles"] == 0
+        assert result["records"][0]["struktural"] == "Dean - School of Computer Science"
+
+    def test_neither_provenance_key_reaches_disk(self, tmp_path, monkeypatch):
+        path = tmp_path / "faculty.json"
+        monkeypatch.setattr(ingestion.settings, "faculty_snapshot_path", path)
+        fresh = [self._rec("D0", **{ingestion._SCAN_INCOMPLETE_KEY: True,
+                                    ingestion._STRUKTURAL_UNKNOWN_KEY: True})]
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: fresh)
+
+        ingestion.refresh_faculty_snapshot("http://x")
+
+        written = json.loads(path.read_text(encoding="utf-8"))[0]
+        for key in ingestion._CRAWL_PROVENANCE_KEYS:
+            assert key not in written
+        assert written["name"] == "Dosen D0"
