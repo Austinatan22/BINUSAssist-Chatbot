@@ -776,6 +776,8 @@ class TestRouteIsLabelled:
         )
         monkeypatch.setattr(chat_service, "load_scraped_urls", lambda: [
             "https://gabung.binus.ac.id/tuition-fee/?campus-location=binus-medan",
+            "https://gabung.binus.ac.id/admission-requirement/?campus-location=binus-medan",
+            "https://gabung.binus.ac.id/admission-procedure/?campus-location=binus-medan",
         ])
         monkeypatch.setattr(
             chat_service, "admission_requirement_url_for_campus",
@@ -811,6 +813,25 @@ class TestRouteIsLabelled:
                  program_names=_CATALOG),
             matched=["Computer Science", "Data Science"],
         ) == "comparison"
+
+    def test_admission_process_bypasses_program_scoped(self, monkeypatch):
+        # The catalog reranks 0.79 on this question and cannot answer it; the admission pages
+        # rerank 0.65 and can. Routed on intent because comparing scores picks the useless one.
+        assert self._route(
+            monkeypatch,
+            Plan(standalone_query="Is there an entrance exam for Computer Science?",
+                 program_names=_CATALOG),
+            matched=["Computer Science"],
+        ) == "admission_pages"
+
+    def test_a_curriculum_question_still_goes_to_the_catalog(self, monkeypatch):
+        # The detector must not swallow ordinary program questions that merely mention studying.
+        assert self._route(
+            monkeypatch,
+            Plan(standalone_query="What subjects will I study in Computer Science?",
+                 program_names=_CATALOG),
+            matched=["Computer Science"],
+        ) == "program_scoped"
 
     def test_tuition_bypasses_program_scoped(self, monkeypatch):
         # The route is what makes the tuition bypass visible: query_type says "comparison" and
@@ -859,6 +880,7 @@ class TestRouteIsLabelled:
                 ("Siapa kepala CS?", {"leadership": True}, [], False),
                 ("What programs are at Kemanggisan?", {}, [], False),
                 ("Compare CS and DS", {}, ["Computer Science", "Data Science"], False),
+                ("Is there an entrance exam for CS?", {}, ["Computer Science"], False),
                 ("Berapa biaya CS?", {"aspects": {"tuition"}}, ["Computer Science"], False),
                 ("CS curriculum?", {}, ["Computer Science"], False),
                 ("Tell me about Information Systems", {}, [], True),

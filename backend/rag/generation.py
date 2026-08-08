@@ -660,6 +660,46 @@ def is_campus_programs_query(query: str) -> bool:
     return bool(_CAMPUS_PROGRAMS_RE.search(query))
 
 
+# "Is there an entrance exam / how do I apply / what are the admission requirements" -- the
+# admission PROCESS, which lives on the per-campus admission-requirement and admission-procedure
+# pages and is nowhere in a program's curriculum catalog.
+#
+# Needs its own detector rather than the broad "admission" aspect, and needs to route by intent
+# rather than by score, because this is the failure mode a confidence gate cannot see. Measured on
+# "Is there an entrance exam for Computer Science?": Computer_Science_2026.pdf reranks 0.79 and
+# CANNOT answer, while the admission pages rerank 0.65 and can. Comparing scores picks the useless
+# document. The gate sees 0.79, passes it, and the model then declines on a catalog that never
+# mentions an entrance test -- one of the five false fallbacks in the 2026-08-08 eval, all five of
+# which were program-scoped with a score ABOVE the gate.
+#
+# Deliberately phrase-based, not single keywords: bare "exam" or "test" would fire on a Software
+# Testing course and on "Assurance of Learning" tables, and bare "requirement" fires on
+# prerequisite rows inside curriculum tables.
+_ADMISSION_PROCESS_RE = re.compile(
+    r"(?:"
+    r"entrance\s+(?:exam|test)"
+    r"|admission\s+(?:test|exam|requirements?|procedure|process)"
+    r"|(?:ujian|tes|test)\s+(?:masuk|saringan|seleksi|penerimaan)"
+    r"|seleksi\s+masuk"
+    r"|syarat\s+(?:masuk|pendaftaran|penerimaan)"
+    r"|cara\s+(?:mendaftar|masuk|pendaftaran)"
+    r"|prosedur\s+pendaftaran"
+    r"|how\s+(?:do|can|to)\s+i?\s*(?:apply|register|enroll)"
+    r"|how\s+to\s+(?:apply|register|enroll)"
+    r"|steps?\s+to\s+apply"
+    r"|apply\s+(?:for\s+admission|as\s+an?\s+undergraduate)"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def is_admission_process_query(query: str) -> bool:
+    """True for a question about how to get IN (entrance test, requirements, how to apply) as
+    opposed to what the program teaches. See _ADMISSION_PROCESS_RE for why this is phrase-based
+    and why the routing it drives cannot be a score comparison."""
+    return bool(_ADMISSION_PROCESS_RE.search(query))
+
+
 def resolve_named_campus(query: str, known_names: Iterable[str]) -> str | None:
     """The canonical campus a query names -- via a known informal alias (normalize_campus_
     aliases, e.g. "anggrek" -> Kemanggisan) or by naming a real campus outright -- returned as

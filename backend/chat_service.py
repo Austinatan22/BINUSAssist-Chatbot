@@ -40,6 +40,7 @@ from backend.rag.generation import (
     detect_unresolved_campus_mention,
     detect_unresolved_program_mention,
     has_domain_vocabulary,
+    is_admission_process_query,
     is_campus_programs_query,
     is_leadership_query,
     is_prompt_extraction_attempt,
@@ -100,6 +101,7 @@ _ROUTES = (
     "faculty_leadership",   # "who is the head of X / dean" -> same roster, uncapped
     "campus_programs",      # "what programs are at campus X" -> that campus's admission page
     "comparison",           # 2-3 named programs -> each program's own document, balanced
+    "admission_pages",      # "how do I get in" -> the admission requirement/procedure pages
     "tuition_campuses",     # 1 named program + tuition aspect -> every campus's fee row
     "program_scoped",       # exactly 1 named program -> that program's document
     "out_of_catalog",       # names a program the KB doesn't have -> deliberate empty
@@ -523,18 +525,33 @@ class ChatService:
             plan.route = "program_scoped"
             source_files = [program_catalog[matched[0]]]
 
-            # Tuition first, catalog second. A program's own catalog cannot answer a
-            # tuition question -- it reranks 0.004 even spelled correctly (see
-            # _retry_with_supplementary_sources' docstring) -- yet the default order pays
-            # for that doomed retrieval AND the LLM rewrite its low score triggers, every
-            # time, before the supplementary retry finally reaches the per-campus pages that
-            # hold the answer. Measured on "Berapa biaya kuliah program CS di Kemanggisan?":
-            # ~2-4s of the ~10s TTFT is spent proving what 1a7f009 already established.
-            #
-            # Purely a reordering: when the tuition pages don't clear the gate, the normal
-            # program-scoped path below runs untouched, so nothing that answers today stops
-            # answering. Single-program only, for the same reason the retry itself is
-            # (comparison mode can't tell which program a campus row belongs to).
+            # Two source-type bypasses before the catalog, for the two question kinds whose
+            # answer is structurally NOT in a curriculum catalog. Both are pure reorderings:
+            # when the alternative source misses the gate, the normal program-scoped path below
+            # runs untouched, so nothing that answers today stops answering. Both are
+            # single-program only, for the same reason the supplementary retry is (comparison
+            # mode can't tell which program a campus row belongs to).
+
+            # Admission process. A catalog carries no entrance tests or application steps, yet
+            # it reranks 0.79 for "Is there an entrance exam for Computer Science?" purely
+            # because the program name matches, clears the 0.5 gate, and the model then declines
+            # on it -- one of the five false fallbacks in the 2026-08-08 eval, every one of which
+            # was program-scoped with a score ABOVE the gate. The admission pages rerank 0.65 and
+            # can answer, so this cannot be decided by comparing scores: the useless document
+            # scores higher. Hence routing on intent (is_admission_process_query).
+            if is_admission_process_query(plan.standalone_query):
+                admission_nodes = await self._retry_admission_pages(retrieval_query)
+                if admission_nodes and admission_nodes[0].score >= gate:
+                    plan.route = "admission_pages"
+                    plan.nodes = admission_nodes
+                    return
+
+            # Tuition. Same shape: a program's own catalog reranks 0.004 on a tuition question
+            # even spelled correctly (see _retry_with_supplementary_sources' docstring), yet the
+            # default order paid for that doomed retrieval AND the LLM rewrite its low score
+            # triggers, every time, before the supplementary retry finally reached the per-campus
+            # pages holding the answer. Measured on "Berapa biaya kuliah program CS di
+            # Kemanggisan?": ~2-4s of the ~10s TTFT spent proving what 1a7f009 already established.
             if "tuition" in plan.aspects:
                 campus_nodes = await self._retry_tuition_across_campuses(
                     retrieval_query, load_scraped_urls()
@@ -786,6 +803,39 @@ class ChatService:
         return await retrieve_for_named_programs(
             self._index, self._reranker, standalone_query, campus_urls,
             balanced=True, per_program_top_n=2, max_nodes=16, extra_queries=extra_queries,
+        )
+
+    async def _retry_admission_pages(self, standalone_query: str) -> list[NodeWithScore]:
+        """Retrieve from the per-campus admission-requirement pages, which carry the Entrance Test
+        and Requirements columns. Balanced across pages for the same reason the tuition retry is:
+        they are large tables, and an unbalanced global top-N pools them into one campus's rows.
+        Measured on the diagnosis run, an unbalanced pass returned 5 nodes ALL from Alam Sutera.
+
+        The admission-PROCEDURE pages are deliberately excluded. Including them doubles the number
+        of metadata-filtered retrievals for an identical result: top score 0.6548 either way, and
+        retrieval time 0.81s against 1.35s on the Indonesian phrasing. They read as generic step
+        lists, so they never win a slot.
+
+        per_program_top_n=3 rather than 1, measured: on "Is there an entrance exam for Computer
+        Science?" the top node reranks 0.5068 at depth 1 and 0.6548 at depth 3. Depth 1 clears the
+        0.5 gate by 0.007, which is not a margin, it is a coincidence -- one phrasing shift and the
+        question falls back again. Depth 3 costs ~8 more nodes of context on a route that only
+        fires for admission questions.
+
+        Known limit, and depth does not fix it: only entrance-test phrasings retrieve well from
+        these pages. "Apa syarat masuk program Computer Science?" tops out at 0.311 and "How do I
+        apply..." at 0.052, because the requirement pages are wide Major/Requirements/Entrance-Test
+        tables whose cells say little, and the procedure pages read as generic step lists. Those
+        need the pages chunked differently, not a different route.
+
+        Returns [] when nothing is scraped yet, so the caller falls through unchanged.
+        """
+        pages = [u for u in load_scraped_urls() if "admission-requirement" in u]
+        if not pages:
+            return []
+        return await retrieve_for_named_programs(
+            self._index, self._reranker, standalone_query, pages,
+            balanced=True, per_program_top_n=3, max_nodes=16,
         )
 
     async def _log_after_stream(self, stream, entry: dict, start_time: float):
