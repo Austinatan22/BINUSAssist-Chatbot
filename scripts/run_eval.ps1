@@ -41,6 +41,13 @@ if (-not $Here) {
 
 Set-Location $repo
 $env:PYTHONUNBUFFERED = '1'
+# MUST be Continue, not Stop, around the native call below. Windows PowerShell 5.1 wraps every
+# line a native exe writes to stderr in a NativeCommandError ErrorRecord, and under 'Stop' the
+# first one aborts the run. That killed a run after 3 lines: bm25s logs "Building index from IDs
+# objects" to stderr at DEBUG, which is not an error at all. The earlier version of this script
+# survived only by accident, because it passed a -Command string to a fresh process where the
+# preference was still the default.
+$ErrorActionPreference = 'Continue'
 # Without this, a single non-ASCII character in a printed question or answer raises
 # UnicodeEncodeError against the console's legacy codepage and kills a 10-minute run outright.
 $env:PYTHONIOENCODING = 'utf-8'
@@ -57,8 +64,14 @@ $writer = New-Object System.IO.StreamWriter(
     $LogPath, $false, (New-Object System.Text.UTF8Encoding($false))
 )
 $writer.AutoFlush = $true
+# Streams are merged by cmd, NOT by PowerShell's `2>&1`. Doing it in the PowerShell pipeline is
+# what produces the ErrorRecord wrapping described above, so each stderr line arrives as a red
+# NativeCommandError block with a call-stack trailer instead of the one line it actually is,
+# which makes the progress window unreadable. cmd merges before PowerShell sees anything, so
+# everything arrives as a plain string.
+$evalPy = Join-Path $repo 'scripts\eval.py'
 try {
-    & $python -u (Join-Path $repo 'scripts\eval.py') 2>&1 | ForEach-Object {
+    & cmd /c "`"$python`" -u `"$evalPy`" 2>&1" | ForEach-Object {
         Write-Host $_
         $writer.WriteLine([string]$_)
     }

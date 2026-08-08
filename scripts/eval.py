@@ -58,6 +58,13 @@ from backend.rag.retrieval import (
 )
 
 logging.basicConfig(level=logging.WARNING)
+# bm25s sets its OWN logger to DEBUG at import, so the root level above cannot suppress it: the
+# record passes bm25s's own level check and then reaches root's handler regardless. It writes
+# "Building index from IDs objects" to stderr, which is not an error and not progress, and in the
+# eval window each such line arrives as a red PowerShell NativeCommandError block (see
+# scripts/run_eval.ps1) that buries the actual output. Same applies when the server builds its BM25
+# retriever, so this is worth setting there too.
+logging.getLogger("bm25s").setLevel(logging.WARNING)
 
 # Fallback detection reads the 'done' event's `fallback` flag, which the backend now sets
 # from ONE place (generation._fallback_events) for every path that falls back. It used to
