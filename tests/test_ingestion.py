@@ -1499,3 +1499,105 @@ class TestHttpGetOkRetryPolicy:
         monkeypatch.setattr(ingestion, "_http_get", flaky)
         monkeypatch.setattr(ingestion.time, "sleep", lambda *_: None)
         assert ingestion._http_get_ok("http://x") == ("<html>ok</html>", True)
+
+
+class TestCourseCoverageGuard:
+    """How MANY courses each lecturer has. The lecturers-with-courses threshold asks only whether a
+    lecturer has ANY, so a crawl that cut everyone from eight courses to one passed every check.
+    Found on the 2026-08-09 refresh: lecturers-with-courses went UP (214 -> 218) while total course
+    entries fell 847 -> 719, and nothing in the guard could see it."""
+
+    def _snapshot(self, tmp_path, monkeypatch, records):
+        path = tmp_path / "faculty.json"
+        path.write_text(json.dumps(records), encoding="utf-8")
+        monkeypatch.setattr(ingestion.settings, "faculty_snapshot_path", path)
+        return path
+
+    def _rec(self, code, courses, year="2025", **kw):
+        base = {"citation_unit": code, "code": code, "name": f"Dosen {code}", "rank": "Lektor",
+                "dept": "Computer Science", "year": year, "courses": list(courses),
+                "campuses": [], "struktural": None}
+        base.update(kw)
+        return base
+
+    def test_a_partial_scholar_response_that_thins_every_list_is_caught(self, tmp_path, monkeypatch):
+        # Same year, same record count, every lecturer still HAS courses -- just far fewer. This is
+        # the exact hole: every other threshold passes.
+        cached = [self._rec(f"D{i}", [f"Course {j}" for j in range(8)]) for i in range(10)]
+        path = self._snapshot(tmp_path, monkeypatch, cached)
+        thinned = [self._rec(f"D{i}", ["Course 0"]) for i in range(10)]
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: thinned)
+
+        result = ingestion.refresh_faculty_snapshot("http://x")
+
+        assert result["wrote"] is False
+        assert "course entries" in result["reason"] and "did not advance" in result["reason"]
+        assert json.loads(path.read_text(encoding="utf-8")) == cached
+        # And the checks that could NOT see it still can't -- proving this guard is what caught it.
+        assert ingestion._lecturers_with(thinned, "courses") == ingestion._lecturers_with(cached, "courses")
+        assert len(thinned) == len(cached)
+
+    def test_a_year_rollover_that_thins_coverage_is_allowed(self, tmp_path, monkeypatch):
+        # The legitimate case, and the reason this is not a flat threshold on total courses. A new
+        # academic year starts partially populated, so _lecturer_recent_courses correctly stops
+        # there and the lists get shorter. Blocking it would keep a snapshot a year out of date.
+        cached = [self._rec(f"D{i}", [f"Course {j}" for j in range(8)], year="2025") for i in range(10)]
+        self._snapshot(tmp_path, monkeypatch, cached)
+        rolled = [self._rec(f"D{i}", ["New Course"], year="2026") for i in range(10)]
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: rolled)
+
+        result = ingestion.refresh_faculty_snapshot("http://x")
+
+        assert result["wrote"] is True, result["reason"]
+        assert result["records"][0]["year"] == "2026"
+
+    def test_the_real_2026_08_09_refresh_would_still_have_been_allowed(self, tmp_path, monkeypatch):
+        # Regression test against the actual event, in miniature: 49 of 233 lecturers lost courses,
+        # every one of them because their year advanced 2025 -> 2026, plus 4 new lecturers. 195
+        # course entries lost, 0 of them unexplained. A flat threshold on total courses (719/847 =
+        # 85%) would have rejected this.
+        cached = [self._rec(f"D{i}", [f"Course {j}" for j in range(4)], year="2025") for i in range(100)]
+        self._snapshot(tmp_path, monkeypatch, cached)
+        fresh = (
+            [self._rec(f"D{i}", ["One Course"], year="2026") for i in range(49)]
+            + [self._rec(f"D{i}", [f"Course {j}" for j in range(4)], year="2025") for i in range(49, 100)]
+            + [self._rec(f"NEW{i}", ["Course A", "Course B"], year="2026") for i in range(4)]
+        )
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: fresh)
+
+        result = ingestion.refresh_faculty_snapshot("http://x")
+
+        lost, cached_total = ingestion._unexplained_course_loss(fresh, cached)
+        assert lost == 0, "every loss was explained by a year advance"
+        assert cached_total == 400
+        assert result["wrote"] is True, result["reason"]
+        assert len(result["records"]) == 104
+
+    def test_an_earlier_year_with_fewer_courses_counts_as_unexplained(self, tmp_path, monkeypatch):
+        # A year moving BACKWARDS never explains anything. _restore_unreadable_teaching already puts
+        # an earlier year back when the scan was flagged incomplete, so one arriving here unflagged
+        # is a real regression rather than a rollover.
+        cached = [self._rec(f"D{i}", [f"Course {j}" for j in range(8)], year="2026") for i in range(10)]
+        self._snapshot(tmp_path, monkeypatch, cached)
+        older = [self._rec(f"D{i}", ["Old Course"], year="2024") for i in range(10)]
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: older)
+
+        assert ingestion.refresh_faculty_snapshot("http://x")["wrote"] is False
+
+    def test_growth_and_new_lecturers_never_trip_it(self, tmp_path, monkeypatch):
+        cached = [self._rec(f"D{i}", ["One"], year="2025") for i in range(10)]
+        self._snapshot(tmp_path, monkeypatch, cached)
+        grown = [self._rec(f"D{i}", ["One", "Two", "Three"], year="2025") for i in range(10)] + \
+                [self._rec("NEW", ["Fresh"], year="2025")]
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records", lambda url: grown)
+
+        result = ingestion.refresh_faculty_snapshot("http://x")
+
+        assert result["wrote"] is True and ingestion._unexplained_course_loss(grown, cached)[0] == 0
+
+    def test_no_cache_means_nothing_to_compare(self, tmp_path, monkeypatch):
+        path = tmp_path / "faculty.json"
+        monkeypatch.setattr(ingestion.settings, "faculty_snapshot_path", path)
+        monkeypatch.setattr(ingestion, "_scrape_faculty_records",
+                            lambda url: [self._rec("D0", ["A"])])
+        assert ingestion.refresh_faculty_snapshot("http://x")["wrote"] is True

@@ -1314,6 +1314,41 @@ def _lecturers_with(records: list[dict], field: str) -> int:
     return sum(1 for r in records if r.get(field))
 
 
+def _unexplained_course_loss(fresh: list[dict], existing: list[dict]) -> tuple[int, int]:
+    """(course entries lost by lecturers whose teaching year did NOT advance, cached total).
+
+    Coverage is allowed to thin for one reason: a year rollover. When a new academic year starts
+    populating, _lecturer_recent_courses correctly stops there, and a partially-filled 2026 lists
+    fewer courses than a completed 2025. That is exactly what the 2026-08-09 refresh did -- 847
+    course entries fell to 719, and every one of the 49 lecturers who lost courses had moved from
+    2025 to 2026. A flat threshold on total courses would have rejected that refresh (719/847 =
+    85%) and kept a snapshot that was a year out of date, so total courses is the wrong thing to
+    measure.
+
+    A drop with no year advance has no such explanation. That is the shape of a degraded crawl, and
+    it is invisible to every other guard here: the record count is unchanged, and the
+    lecturers-with-courses count asks whether a lecturer has ANY courses (which went UP on that
+    same refresh, 214 -> 218) rather than how many. A crawl that cut every lecturer from eight
+    courses to one would pass everything else untouched.
+    """
+    by_unit = {r.get("citation_unit"): r for r in existing}
+    lost = 0
+    for record in fresh:
+        cached = by_unit.get(record.get("citation_unit"))
+        if not cached:
+            continue
+        before, after = cached.get("courses") or [], record.get("courses") or []
+        if len(after) >= len(before):
+            continue
+        # A year that moved forward explains the shorter list; anything else does not. Equal or
+        # earlier years both count as unexplained -- _restore_unreadable_teaching already puts an
+        # earlier year back when the scan was incomplete, so one reaching here is a real regression.
+        if (record.get("year") or "") > (cached.get("year") or ""):
+            continue
+        lost += len(before) - len(after)
+    return lost, sum(len(r.get("courses") or []) for r in existing)
+
+
 def _restore_unknown_struktural(fresh: list[dict], existing: list[dict]) -> int:
     """Put back cached structural roles when the org-chart page could not be read at all.
 
@@ -1363,22 +1398,28 @@ def _restore_unreadable_teaching(fresh: list[dict], existing: list[dict]) -> int
 def refresh_faculty_snapshot(url: str = FACULTY_ROSTER_URL, min_fraction: float = 0.9) -> dict:
     """Force a fresh crawl (the ONLY path that re-scrapes) and overwrite the cached snapshot.
 
-    Two guardrails, because a degraded crawl has two very different shapes.
+    Four guardrails, because a degraded crawl has four different shapes and each one is invisible
+    to the checks that came before it.
 
-    Record count: if the fresh crawl returns notably fewer records than the cache
-    (< min_fraction), a rotated token or a restyled BINUS page has broken the roster scrape, and
-    the good snapshot is KEPT.
+    Record count: the fresh crawl returns notably fewer records than the cache (< min_fraction), so
+    a rotated token or a restyled BINUS page has broken the roster scrape.
 
-    Lecturers with courses: the count check passes untouched when the roster page scrapes fine but
-    the scholar API is down, because every name is still there -- just with no rank, no department
-    and no courses. That is the more likely outage of the two (two APIs and a bearer token versus
-    one HTML page) and it was invisible to the old guard. Course lists are what a who-teaches
-    answer is built from, so they get their own threshold.
+    Lecturers with courses, and lecturers with struktural: the count check passes untouched when the
+    roster page scrapes fine but the scholar API or the org-chart page is down, because every name
+    is still there, just with no rank, no department and no courses. That is the likelier outage
+    (two APIs and a bearer token versus one HTML page). Each field comes from a different source, so
+    each gets its own threshold.
+
+    Courses PER lecturer: the check above asks whether a lecturer has any courses, not how many, so
+    a crawl that cut every lecturer from eight courses to one would pass it -- and on the 2026-08-09
+    refresh that count went UP (214 -> 218) while total course entries fell 847 -> 719. Only loss
+    unexplained by a year advance is counted, because a year rollover legitimately thins coverage;
+    see _unexplained_course_loss.
 
     Records whose scan was incomplete also have their cached year/courses restored first, so a
     per-lecturer blip can't backdate a teaching year (see _restore_unreadable_teaching).
 
-    Returns {records, wrote, reason, incomplete, restored}.
+    Returns {records, wrote, reason, incomplete, restored, restored_roles}.
     """
     fresh = _scrape_faculty_records(url)
     existing = _load_faculty_snapshot() or []
@@ -1422,6 +1463,22 @@ def refresh_faculty_snapshot(url: str = FACULTY_ROSTER_URL, min_fraction: float 
             return kept(
                 f"fresh crawl has {field} for {fresh_n} lecturers < {min_fraction:.0%} of cached "
                 f"{cached_n}; {blame}; kept cache"
+            )
+
+    # How MANY courses each lecturer has, which the per-field checks above cannot see: they ask
+    # whether a lecturer has any. Only loss with no year advance counts (see
+    # _unexplained_course_loss) -- a year rollover legitimately thins coverage and must still be
+    # allowed through.
+    if existing:
+        lost, cached_courses = _unexplained_course_loss(fresh, existing)
+        # Phrased as "retained < cached * min_fraction" to match the two checks above, and because
+        # the obvious "lost > cached * (1 - min_fraction)" has a floating-point edge: 1 - 0.9 is
+        # 0.09999999999999998, so a single lost course out of ten trips a nominally-10% tolerance.
+        if cached_courses and (cached_courses - lost) < cached_courses * min_fraction:
+            return kept(
+                f"fresh crawl lost {lost} course entries ({lost / cached_courses:.0%} of cached "
+                f"{cached_courses}) from lecturers whose teaching year did not advance; "
+                f"scholar API likely returning partial results; kept cache"
             )
 
     _save_faculty_snapshot(fresh)
