@@ -2003,3 +2003,72 @@ class TestIsLeadershipQuery:
         # "who teaches" is a distinct intent (enumeration + cap); leadership must not steal it.
         assert is_leadership_query("Siapa yang mengajar Machine Learning?") is False
         assert is_who_teaches_query("Siapa yang mengajar Machine Learning?") is True
+
+
+class TestConversationLanguage:
+    """A follow-up too short to classify inherits the conversation's language.
+
+    "Kalau Cyber Security?" is Indonesian but carries no marker word, so it fell through to
+    lingua, which saw three tokens of which two are an English program name and returned English.
+    Measured 2026-08-09: 'Kalau Cyber Security?' -> en while 'Kalau Data Science?' -> id, a coin
+    flip on the identical construction. The answer's language is built from this
+    (prompts.language_reminder), so one in three Indonesian follow-ups came back in English
+    mid-conversation -- confirmed live, turn 1 answered in Indonesian and turn 2 in English.
+    """
+
+    ID_HISTORY = [
+        {"role": "user", "content": "Apa saja mata kuliah di program Computer Science?"},
+        {"role": "assistant", "content": "Berikut adalah mata kuliah di program tersebut..."},
+    ]
+    EN_HISTORY = [
+        {"role": "user", "content": "What courses are in the Computer Science program?"},
+        {"role": "assistant", "content": "The courses in the program are..."},
+    ]
+
+    @pytest.mark.parametrize("message", ["Kalau Cyber Security?", "Semester 5?", "Kalau di Bandung?"])
+    def test_a_terse_follow_up_inherits_indonesian(self, message):
+        assert generation.detect_conversation_language(message, self.ID_HISTORY) == "id"
+
+    @pytest.mark.parametrize("message", ["What about Data Science?", "Semester 5?", "And Bandung?"])
+    def test_a_terse_follow_up_inherits_english(self, message):
+        assert generation.detect_conversation_language(message, self.EN_HISTORY) == "en"
+
+    def test_an_explicit_marker_in_the_current_message_always_wins(self):
+        # Switching language mid-conversation must take effect on the turn it happens, not the
+        # turn after. The marker check runs before any history lookup for exactly this reason.
+        assert generation.detect_conversation_language("Berapa biayanya?", self.EN_HISTORY) == "id"
+
+    def test_a_long_message_is_judged_on_its_own(self):
+        # Above the word threshold there is enough text to classify, so an English question in an
+        # Indonesian conversation is answered in English rather than inheriting.
+        long_en = "How much does the Cyber Security program cost per semester at Kemanggisan?"
+        assert generation.detect_conversation_language(long_en, self.ID_HISTORY) == "en"
+
+    def test_no_history_matches_detect_language_exactly(self):
+        # First turns must be completely unaffected: this is a follow-up fix, not a detector change.
+        for message in ["Kalau Cyber Security?", "Semester 5?", "Apa itu Data Science?",
+                        "What is Computer Science?", ""]:
+            assert generation.detect_conversation_language(message, None) ==                 generation.detect_language(message)
+            assert generation.detect_conversation_language(message, []) ==                 generation.detect_language(message)
+
+    def test_assistant_turns_are_never_consulted(self):
+        # An assistant reply is derivative -- it answers in whatever language was detected -- so
+        # trusting it would let one wrong detection poison the rest of the conversation. Here the
+        # only decidable text is an assistant message in Indonesian; the user turns are short, so
+        # the result must fall through to judging the message itself, not adopt "id".
+        history = [
+            {"role": "user", "content": "CS?"},
+            {"role": "assistant", "content": "Program Computer Science adalah program studi yang..."},
+        ]
+        assert generation.detect_conversation_language("Cyber Security?", history) ==             generation.detect_language("Cyber Security?")
+
+    def test_the_most_recent_decidable_user_turn_wins(self):
+        # A conversation that switched to English earlier should not be dragged back by an older
+        # Indonesian turn.
+        history = [
+            {"role": "user", "content": "Apa saja mata kuliah di program Computer Science?"},
+            {"role": "assistant", "content": "Berikut..."},
+            {"role": "user", "content": "Please explain the Data Science curriculum in English."},
+            {"role": "assistant", "content": "The Data Science curriculum covers..."},
+        ]
+        assert generation.detect_conversation_language("And Cyber Security?", history) == "en"

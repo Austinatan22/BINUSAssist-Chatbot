@@ -75,6 +75,46 @@ def detect_language(query: str) -> str:
     return "id" if detected == Language.INDONESIAN else "en"
 
 
+# A follow-up can be too short to classify. "Kalau Cyber Security?" is Indonesian but carries no
+# marker word, so it falls through to lingua, which sees three tokens of which two are an English
+# program name and answers English. Measured 2026-08-09: 'Kalau Cyber Security?' -> en while
+# 'Kalau Data Science?' -> id, a coin flip on the identical construction. The ANSWER's language
+# follows this (see prompts.language_reminder), so one in three Indonesian follow-ups was answered
+# in English mid-conversation, which is the same defect language_reminder was written to prevent,
+# arriving from the other direction.
+#
+# Below this many words, a message with no Indonesian marker is treated as undecidable rather than
+# English. Five is deliberately generous: "Kalau Cyber Security?" is 3, "Semester 5?" is 2, and a
+# genuinely English question that short ("What about Data Science?" is 4) still resolves correctly
+# because it inherits from an English conversation.
+_LANGUAGE_CONFIDENT_WORDS = 5
+_WORD_RE = re.compile(r"\w+")
+
+
+def detect_conversation_language(query: str, history: list[dict] | None = None) -> str:
+    """detect_language, except a follow-up too short to judge inherits the language the
+    conversation already established.
+
+    Order matters: an Indonesian marker in the CURRENT message always wins, so an explicit
+    language switch mid-conversation is honoured immediately. Only when the current message is both
+    short and marker-free does this look back, and then only at USER turns -- an assistant reply is
+    derivative (it answers in whatever language was detected), so trusting it would let one wrong
+    detection poison the rest of the conversation.
+    """
+    if _INDONESIAN_MARKER_RE.search(query):
+        return "id"
+    if history and len(_WORD_RE.findall(query)) < _LANGUAGE_CONFIDENT_WORDS:
+        for message in reversed(_recent_history(history)):
+            if message.get("role") != "user":
+                continue
+            text = message.get("content") or ""
+            if _INDONESIAN_MARKER_RE.search(text):
+                return "id"
+            if len(_WORD_RE.findall(text)) >= _LANGUAGE_CONFIDENT_WORDS:
+                return detect_language(text)
+    return detect_language(query)
+
+
 def _recent_history(history: list[dict]) -> list[dict]:
     """Last settings.max_history_messages entries, oldest first -- the single place both
     condense_question and build_messages truncate from, so a client sending an unbounded
@@ -1486,7 +1526,11 @@ def build_messages(
         # model having only a prose instruction to remember on its own.
         context_blocks.append(f"[{sid}] ({labels[sid]})\n<context-block>\n{text}\n</context-block>")
     context = "\n\n".join(context_blocks)
-    query_language = detect_language(query)
+    # Conversation-aware: a follow-up too short to classify inherits the language already
+    # established rather than taking lingua's guess on a few tokens (see
+    # detect_conversation_language). This is what the answer's language_reminder is built from, so
+    # getting it wrong answers an Indonesian follow-up in English.
+    query_language = detect_conversation_language(query, history)
     # An alias note (e.g. "Anggrek" -> Kemanggisan) is appended to the user turn, NOT folded
     # into a context block: it's guidance about the question's wording, not retrieved source
     # material, and must not read as citable content. Language detection stays on the raw

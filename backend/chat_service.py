@@ -35,6 +35,7 @@ from backend.rag.cache import (
 from backend.rag.generation import (
     comparison_attribute_query,
     condense_question,
+    detect_conversation_language,
     detect_language,
     detect_named_programs,
     detect_unresolved_campus_mention,
@@ -281,10 +282,17 @@ class ChatService:
                 yield event
             return
 
+        # Decided ONCE per turn and reused below, so the answer, the follow-up chips, the
+        # clarification copy and the logged field cannot disagree. Conversation-aware: a follow-up
+        # too short to classify inherits the language already established rather than taking
+        # lingua's guess on a few tokens (see generation.detect_conversation_language).
+        turn_language = plan.cache_language or detect_conversation_language(
+            plan.standalone_query, history
+        )
         log_entry = _log_entry(
             message, "comparison" if plan.is_comparison else "single", history,
             standalone_query=plan.standalone_query,
-            language=plan.cache_language or detect_language(plan.standalone_query),
+            language=turn_language,
             route=plan.route,
             matched_programs=plan.matched_programs,
             aspects=sorted(plan.aspects),
@@ -321,7 +329,7 @@ class ChatService:
             log_entry["fallback"] = False
             suggestions = rank_clarification_suggestions(term, known)
             answer_stream = stream_clarification(
-                term, suggestions, known, kind, detect_language(plan.standalone_query)
+                term, suggestions, known, kind, turn_language
             )
         # Soft daily token budget (IMPROVEMENTS.md #3.2): decline generation before it
         # ever reaches the LLM provider once today's usage crosses the cap. A cache hit
@@ -335,9 +343,7 @@ class ChatService:
             # answer with (an empty node list becomes a fallback, where #9.4 shows starter
             # questions instead).
             follow_ups = (
-                suggest_follow_ups(
-                    plan.matched_programs, plan.aspects, detect_language(plan.standalone_query)
-                )
+                suggest_follow_ups(plan.matched_programs, plan.aspects, turn_language)
                 if plan.nodes
                 else []
             )
